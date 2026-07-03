@@ -1,0 +1,1949 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1">
+<title>Bridge Trivia: A Star Trek Party Game</title>
+<style>
+/* ============================================================================
+   BRIDGE TRIVIA — GLOBAL DESIGN TOKENS
+   Base look: a command-console panel floating on a starfield. Each era gets its
+   own accent palette (set via [data-era] attribute) layered on top of these
+   shared tokens, so era decks feel distinct without re-inventing layout.
+   ============================================================================ */
+:root{
+  --bg-deep:#05060d;
+  --bg-panel:#0d1220;
+  --bg-panel-2:#131a2e;
+  --line:#26314d;
+  --text:#e9edf7;
+  --text-dim:#9aa6c4;
+  --accent:#5fd0ff;
+  --accent-2:#7c5cff;
+  --good:#3ddc97;
+  --bad:#ff5d7a;
+  --warn:#ffcc66;
+  --radius:14px;
+  --radius-sm:8px;
+  --shadow-glow:0 0 0 1px rgba(95,208,255,.15), 0 8px 30px rgba(0,0,0,.55);
+  --font-display:'Orbitron', 'Segoe UI', sans-serif;
+  --font-body:'Exo 2','Segoe UI',sans-serif;
+  --font-mono:'Share Tech Mono','Consolas',monospace;
+}
+*{box-sizing:border-box;}
+html,body{height:100%;}
+body{
+  margin:0;
+  background:var(--bg-deep);
+  color:var(--text);
+  font-family:var(--font-body);
+  min-height:100vh;
+  overflow-x:hidden;
+  -webkit-tap-highlight-color:transparent;
+}
+@font-face{ /* system fallback stack only; no external font fetch required */ }
+h1,h2,h3,h4{font-family:var(--font-display);letter-spacing:.03em;margin:0 0 .4em;}
+p{margin:0 0 .6em;line-height:1.5;}
+button{font-family:var(--font-body);cursor:pointer;}
+::selection{background:var(--accent);color:#001018;}
+:focus-visible{outline:3px solid var(--accent);outline-offset:2px;}
+
+/* Starfield background layer */
+#starfield{
+  position:fixed;inset:0;z-index:0;pointer-events:none;
+  background:
+    radial-gradient(ellipse at 20% 20%, rgba(124,92,255,.10), transparent 55%),
+    radial-gradient(ellipse at 80% 70%, rgba(95,208,255,.10), transparent 55%),
+    var(--bg-deep);
+}
+#starfield canvas{position:absolute;inset:0;width:100%;height:100%;}
+
+#app{position:relative;z-index:1;min-height:100vh;display:flex;flex-direction:column;}
+
+/* ---------- Layout shell ---------- */
+.wrap{max-width:1200px;margin:0 auto;padding:20px;width:100%;}
+.topbar{
+  display:flex;align-items:center;justify-content:space-between;gap:12px;
+  padding:14px 20px;background:rgba(13,18,32,.85);backdrop-filter:blur(6px);
+  border-bottom:1px solid var(--line);position:sticky;top:0;z-index:20;flex-wrap:wrap;
+}
+.brand{display:flex;align-items:center;gap:10px;}
+.brand .badge{
+  width:38px;height:38px;border-radius:50%;
+  background:conic-gradient(from 90deg, var(--accent), var(--accent-2), var(--accent));
+  display:flex;align-items:center;justify-content:center;font-family:var(--font-display);
+  font-weight:900;color:#04101c;font-size:14px;box-shadow:0 0 18px rgba(95,208,255,.55);
+}
+.brand h1{font-size:1.05rem;margin:0;}
+.brand .sub{font-size:.72rem;color:var(--text-dim);letter-spacing:.08em;text-transform:uppercase;}
+.topbar-right{display:flex;gap:10px;align-items:center;flex-wrap:wrap;}
+.roomcode-pill{
+  font-family:var(--font-mono);background:var(--bg-panel-2);border:1px solid var(--line);
+  padding:6px 12px;border-radius:20px;font-size:.95rem;letter-spacing:.15em;color:var(--accent);
+}
+
+/* ---------- Buttons ---------- */
+.btn{
+  border:1px solid var(--line);background:var(--bg-panel-2);color:var(--text);
+  padding:12px 18px;border-radius:var(--radius-sm);font-size:.95rem;font-weight:600;
+  transition:transform .12s ease, box-shadow .12s ease, background .12s ease;
+  min-height:44px;
+}
+.btn:hover{transform:translateY(-1px);box-shadow:0 4px 16px rgba(0,0,0,.35);}
+.btn:active{transform:translateY(0);}
+.btn-primary{background:linear-gradient(135deg,var(--accent),var(--accent-2));color:#04101c;border:none;}
+.btn-good{background:linear-gradient(135deg,#2fbf82,#3ddc97);color:#00230f;border:none;}
+.btn-bad{background:linear-gradient(135deg,#e14a68,#ff5d7a);color:#2a0008;border:none;}
+.btn-ghost{background:transparent;}
+.btn-sm{padding:8px 12px;font-size:.82rem;min-height:36px;}
+.btn-block{width:100%;}
+.btn:disabled{opacity:.4;cursor:not-allowed;transform:none;box-shadow:none;}
+.btn-icon{width:44px;height:44px;padding:0;border-radius:50%;display:inline-flex;align-items:center;justify-content:center;font-size:1.1rem;}
+
+/* ---------- Panels / cards (UI containers, not trivia cards) ---------- */
+.panel{
+  background:linear-gradient(180deg, var(--bg-panel), var(--bg-panel-2));
+  border:1px solid var(--line);border-radius:var(--radius);padding:18px;
+  box-shadow:var(--shadow-glow);
+}
+.panel + .panel{margin-top:18px;}
+.panel h2{font-size:1rem;color:var(--accent);text-transform:uppercase;letter-spacing:.08em;}
+.grid{display:grid;gap:16px;}
+.grid-2{grid-template-columns:1fr 1fr;}
+.grid-3{grid-template-columns:repeat(3,1fr);}
+@media(max-width:820px){.grid-2,.grid-3{grid-template-columns:1fr;}}
+
+label{display:block;font-size:.8rem;color:var(--text-dim);margin-bottom:6px;text-transform:uppercase;letter-spacing:.06em;}
+input[type=text]{
+  width:100%;padding:12px 14px;border-radius:var(--radius-sm);border:1px solid var(--line);
+  background:#080b16;color:var(--text);font-size:1rem;font-family:var(--font-mono);letter-spacing:.05em;
+}
+input[type=text]:focus{border-color:var(--accent);}
+.field{margin-bottom:14px;}
+.hint{font-size:.78rem;color:var(--text-dim);}
+.error-msg{color:var(--bad);font-size:.85rem;margin-top:6px;min-height:1.1em;}
+
+/* ---------- Landing screen ---------- */
+.hero{text-align:center;padding:40px 20px 10px;}
+.hero h1{font-size:clamp(1.8rem,5vw,3rem);
+  background:linear-gradient(135deg,#fff,var(--accent) 60%,var(--accent-2));
+  -webkit-background-clip:text;background-clip:text;color:transparent;
+}
+.hero p{color:var(--text-dim);max-width:560px;margin:0 auto 20px;}
+.landing-actions{display:flex;gap:16px;justify-content:center;flex-wrap:wrap;margin:26px 0;}
+.landing-actions .btn{min-width:220px;font-size:1.05rem;padding:16px 22px;}
+.era-strip{display:flex;gap:10px;justify-content:center;flex-wrap:wrap;margin:30px 0;}
+.era-chip{
+  padding:8px 14px;border-radius:20px;font-size:.78rem;font-weight:700;letter-spacing:.04em;
+  border:1px solid var(--line);
+}
+details.info{max-width:760px;margin:18px auto;background:var(--bg-panel);border:1px solid var(--line);border-radius:var(--radius);padding:4px 16px;}
+details.info summary{cursor:pointer;padding:12px 0;font-family:var(--font-display);color:var(--accent);font-size:.95rem;}
+details.info .body{padding-bottom:16px;color:var(--text-dim);font-size:.9rem;}
+details.info code{background:#000;color:var(--accent);padding:2px 6px;border-radius:4px;font-family:var(--font-mono);}
+details.info ol,details.info ul{padding-left:1.2em;}
+
+/* ---------- Scoreboard ---------- */
+.scoreboard{display:flex;flex-wrap:wrap;gap:10px;}
+.score-card{
+  flex:1 1 140px;background:var(--bg-panel-2);border:1px solid var(--line);border-radius:var(--radius-sm);
+  padding:10px 12px;position:relative;
+}
+.score-card.active{border-color:var(--accent);box-shadow:0 0 0 1px var(--accent), 0 0 18px rgba(95,208,255,.35);}
+.score-card .name{font-weight:700;font-size:.92rem;display:flex;align-items:center;gap:6px;}
+.score-card .turn-tag{font-size:.62rem;background:var(--accent);color:#001018;padding:2px 6px;border-radius:10px;text-transform:uppercase;}
+.score-card .pts{font-family:var(--font-mono);font-size:1.4rem;color:var(--accent);margin-top:4px;}
+.score-card .adjust{display:flex;gap:6px;margin-top:8px;}
+.score-card .adjust button{flex:1;padding:4px;font-size:.85rem;}
+.score-card .remove{position:absolute;top:6px;right:6px;background:none;border:none;color:var(--text-dim);font-size:.9rem;}
+
+/* ---------- Dice ---------- */
+.dice-zone{display:flex;flex-direction:column;align-items:center;gap:14px;padding:10px 0;}
+.die{
+  width:110px;height:110px;border-radius:20px;position:relative;
+  background:radial-gradient(circle at 30% 30%, #1c2440, #05070f);
+  border:2px solid var(--line);display:flex;align-items:center;justify-content:center;
+  font-family:var(--font-display);font-size:1rem;text-align:center;color:var(--text);
+  box-shadow:0 10px 30px rgba(0,0,0,.5), inset 0 0 20px rgba(95,208,255,.08);
+  transition:transform .15s ease;
+}
+.die.rolling{animation:diceRoll .55s linear infinite;}
+@keyframes diceRoll{
+  0%{transform:rotate(0deg) scale(1);}
+  50%{transform:rotate(180deg) scale(1.08);}
+  100%{transform:rotate(360deg) scale(1);}
+}
+.die .die-label{font-size:.62rem;letter-spacing:.08em;color:var(--text-dim);position:absolute;bottom:10px;}
+.die .die-face{font-size:1.6rem;font-weight:900;}
+.die.result-wildcard{border-color:#ffd15c;box-shadow:0 0 30px rgba(255,209,92,.55);}
+
+/* ---------- Era grid (deck selector) ---------- */
+.era-grid{display:grid;grid-template-columns:repeat(auto-fit,minmax(150px,1fr));gap:12px;}
+.era-tile{
+  border-radius:var(--radius);padding:14px;border:2px solid transparent;position:relative;overflow:hidden;
+  cursor:pointer;min-height:110px;display:flex;flex-direction:column;justify-content:space-between;
+  transition:transform .15s ease, box-shadow .15s ease;color:#fff;
+}
+.era-tile:hover{transform:translateY(-3px);}
+.era-tile.disabled{opacity:.35;cursor:not-allowed;transform:none;filter:grayscale(.4);}
+.era-tile.selected{border-color:#fff;box-shadow:0 0 0 3px rgba(255,255,255,.25);}
+.era-tile.highlight{animation:pulseGlow 1.1s ease-in-out infinite;}
+@keyframes pulseGlow{
+  0%,100%{box-shadow:0 0 0 0 rgba(255,255,255,.55);}
+  50%{box-shadow:0 0 0 8px rgba(255,255,255,0);}
+}
+.era-tile .era-icon{font-family:var(--font-display);font-weight:900;font-size:1.3rem;letter-spacing:.05em;}
+.era-tile .era-name{font-size:.85rem;font-weight:700;}
+.era-tile .era-tagline{font-size:.68rem;opacity:.85;}
+.era-tile .era-progress{font-size:.68rem;font-family:var(--font-mono);opacity:.9;}
+
+/* Era palettes — applied via data-era attribute on .era-tile / .card-face / panels */
+[data-era="tos"]{background:linear-gradient(150deg,#8B1E1E 0%,#1B3A6B 55%,#0a1128 100%);}
+[data-era="tos"] .era-icon{color:#D4AF37;}
+[data-era="tng"]{background:linear-gradient(150deg,#3a0d1f 0%,#7B1E3A 40%,#CC6600 100%);}
+[data-era="tng"] .era-icon{color:#ffb673;}
+[data-era="ent"]{background:linear-gradient(150deg,#0e1830 0%,#1b2a4a 50%,#42586e 100%);}
+[data-era="ent"] .era-icon{color:#cfe0ee;}
+[data-era="kelvin"]{background:linear-gradient(150deg,#02040a 0%,#0a3a52 55%,#00d4ff 130%);}
+[data-era="kelvin"] .era-icon{color:#eafcff;}
+[data-era="modern"]{background:linear-gradient(150deg,#150a2e 0%,#3b1e6d 45%,#7c3aed 100%);}
+[data-era="modern"] .era-icon{color:#9ff0ff;}
+[data-era="wildcard"]{background:conic-gradient(from 120deg,#ff6ec7,#7c5cff,#5fd0ff,#ffd15c,#ff6ec7);}
+[data-era="wildcard"] .era-icon{color:#0a0a12;}
+[data-era="wildcard"] .era-name, [data-era="wildcard"] .era-tagline, [data-era="wildcard"] .era-progress{color:#0a0a12;}
+
+/* ---------- Card grid (per-era deck of trivia cards) ---------- */
+.card-grid{display:grid;grid-template-columns:repeat(auto-fill,minmax(90px,1fr));gap:10px;margin-top:10px;}
+.mini-card{
+  aspect-ratio:3/4;border-radius:10px;border:1px solid var(--line);display:flex;align-items:center;justify-content:center;
+  font-family:var(--font-display);font-weight:900;color:#fff;position:relative;transition:transform .12s ease;
+}
+.mini-card:not(.used):hover{transform:scale(1.05);}
+.mini-card.used{opacity:.25;filter:grayscale(1);cursor:not-allowed;}
+.mini-card .num{font-size:1.1rem;}
+
+/* ---------- Trivia card face (question display) ---------- */
+.card-face{
+  border-radius:18px;padding:26px;position:relative;overflow:hidden;color:#fff;
+  min-height:220px;display:flex;flex-direction:column;gap:14px;justify-content:center;
+  border:1px solid rgba(255,255,255,.25);
+}
+.card-face .era-tag{position:absolute;top:14px;left:16px;font-size:.66rem;letter-spacing:.12em;text-transform:uppercase;opacity:.85;}
+.card-face .diff-tag{
+  position:absolute;top:14px;right:16px;font-family:var(--font-mono);font-size:.75rem;
+  background:rgba(0,0,0,.35);padding:4px 10px;border-radius:12px;
+}
+.card-face .q-text{font-size:clamp(1.05rem,2.4vw,1.5rem);font-weight:700;line-height:1.4;margin-top:14px;}
+.card-face .a-text{
+  font-size:1.05rem;font-family:var(--font-mono);background:rgba(0,0,0,.35);padding:12px 14px;border-radius:10px;
+  border-left:4px solid var(--good);
+}
+.diff-select{display:flex;gap:10px;flex-wrap:wrap;margin-top:12px;}
+.diff-btn{
+  flex:1 1 130px;padding:14px 10px;border-radius:12px;border:1px solid var(--line);background:var(--bg-panel-2);
+  color:var(--text);text-align:center;font-family:var(--font-display);
+}
+.diff-btn .lvl{font-size:.9rem;}
+.diff-btn .pts{font-size:1.3rem;color:var(--accent);}
+.diff-btn.used{opacity:.3;filter:grayscale(1);cursor:not-allowed;}
+.diff-btn:not(.used):hover{border-color:var(--accent);}
+
+/* ---------- Misc UI ---------- */
+.turn-banner{
+  text-align:center;padding:12px;border-radius:var(--radius-sm);background:linear-gradient(90deg,var(--accent-2),var(--accent));
+  color:#04101c;font-weight:800;letter-spacing:.03em;font-family:var(--font-display);font-size:.95rem;
+}
+.pill-row{display:flex;gap:8px;flex-wrap:wrap;align-items:center;}
+.pill{background:var(--bg-panel-2);border:1px solid var(--line);border-radius:14px;padding:4px 10px;font-size:.75rem;color:var(--text-dim);}
+.flex-between{display:flex;align-items:center;justify-content:space-between;gap:10px;flex-wrap:wrap;}
+.toast{
+  position:fixed;bottom:20px;left:50%;transform:translateX(-50%);
+  background:var(--bg-panel-2);border:1px solid var(--accent);color:var(--text);
+  padding:12px 20px;border-radius:var(--radius-sm);z-index:100;box-shadow:var(--shadow-glow);
+  font-size:.9rem;max-width:90vw;text-align:center;
+}
+.list-row{display:flex;align-items:center;justify-content:space-between;gap:8px;padding:8px 10px;border:1px solid var(--line);border-radius:var(--radius-sm);margin-bottom:8px;background:var(--bg-panel-2);}
+.list-row input[type=text]{padding:8px 10px;font-size:.9rem;}
+.tag-mode{font-size:.7rem;padding:2px 8px;border-radius:10px;background:var(--accent-2);color:#fff;text-transform:uppercase;}
+.footer-note{text-align:center;color:var(--text-dim);font-size:.75rem;padding:20px;}
+.hidden{display:none !important;}
+.sync-status{display:flex;align-items:center;gap:6px;font-size:.72rem;color:var(--text-dim);}
+.sync-dot{width:8px;height:8px;border-radius:50%;background:var(--good);}
+.sync-dot.local{background:var(--warn);}
+
+@media(max-width:600px){
+  .wrap{padding:12px;}
+  .card-face{padding:18px;}
+  .die{width:88px;height:88px;}
+}
+</style>
+</head>
+<body>
+
+<div id="starfield"><canvas id="starfield-canvas"></canvas></div>
+
+<div id="app">
+  <!-- ============================ TOP BAR ============================ -->
+  <div class="topbar" id="topbar">
+    <div class="brand">
+      <div class="badge">BT</div>
+      <div>
+        <h1>Bridge Trivia</h1>
+        <div class="sub">A Star Trek Party Game</div>
+      </div>
+    </div>
+    <div class="topbar-right" id="topbarRight"><!-- populated by JS: room code, role, sync status --></div>
+  </div>
+
+  <div class="wrap" id="main"><!-- all screens render here via JS --></div>
+
+  <div class="footer-note">Fan-made trivia for private/personal use. Not affiliated with or endorsed by CBS/Paramount. All questions are original write-ups about published, publicly known Star Trek premises — no scripts or copyrighted text are reproduced.</div>
+</div>
+
+<div id="toastHost"></div>
+
+<!-- ======================================================================
+     OPTIONAL: Firebase SDK (compat build) for true cross-device sync.
+     This only activates if you fill in FIREBASE_CONFIG below with real
+     values. Loaded from Google's CDN — see setup instructions in the
+     comment block near FIREBASE_CONFIG in the script section.
+====================================================================== -->
+<script src="https://www.gstatic.com/firebasejs/10.12.2/firebase-app-compat.js"></script>
+<script src="https://www.gstatic.com/firebasejs/10.12.2/firebase-database-compat.js"></script>
+
+<script>
+/* ============================================================================
+   BRIDGE TRIVIA — GAME SCRIPT
+   Sections:
+     1. CONFIG & SYNC LAYER (Firebase or LocalSync fallback)
+     2. TRIVIA DATA (5 eras x 20 cards x 4 questions)
+     3. GAME STATE HELPERS
+     4. RENDERING — Landing / Host / Player screens
+     5. EVENT HANDLERS / GAME LOGIC
+     6. BOOTSTRAP
+   ============================================================================ */
+
+/* ----------------------------------------------------------------------
+   1. CONFIG & SYNC LAYER
+   ------------------------------------------------------------------------
+   HOW TO ENABLE TRUE REMOTE PLAY (recommended — takes about 5 minutes):
+     1. Go to https://console.firebase.google.com and create a free project.
+     2. In the project, open "Build > Realtime Database" and click
+        "Create Database". Start in TEST MODE for a quick game night
+        (anyone with the link can read/write — fine for a casual party
+        game with random room codes; do not use for sensitive data).
+     3. Go to Project Settings > General > "Your apps" > Web app (</>),
+        register an app, and copy the firebaseConfig object it gives you.
+     4. Paste those values into FIREBASE_CONFIG below, replacing the
+        placeholder strings.
+     5. Re-open this HTML file (or re-upload it to your host). The game
+        will automatically detect the config and use Firebase for
+        real-time cross-device sync — host on a laptop, players join from
+        their phones anywhere with internet access.
+
+   IF YOU SKIP THIS STEP:
+     The game still works! It automatically falls back to "LocalSync"
+     mode, which uses the browser's localStorage + BroadcastChannel API.
+     This keeps multiple BROWSER TABS/WINDOWS ON THE SAME DEVICE in sync
+     instantly — great for pass-and-play on one computer/tablet, or for
+     a single host device where players take turns on the same screen.
+     LocalSync CANNOT sync across different physical devices — for that
+     you need Firebase (or another backend) configured above.
+   ---------------------------------------------------------------------- */
+const FIREBASE_CONFIG = {
+  apiKey: "AIzaSyCD_nb1KB57Tl5wgfmSMShQNq91F1YPcBY",
+  authDomain: "trekia-a4b59.firebaseapp.com",
+  databaseURL: "https://trekia-a4b59-default-rtdb.firebaseio.com",
+  projectId: "trekia-a4b59",
+  storageBucket: "trekia-a4b59.firebasestorage.app",
+  messagingSenderId: "832581251669",
+  appId: "1:832581251669:web:459d2c1011ac9ca32e9adc"
+};
+
+const FIREBASE_ENABLED = FIREBASE_CONFIG.apiKey && FIREBASE_CONFIG.apiKey.indexOf("YOUR_") !== 0;
+
+/**
+ * Sync abstraction. Both backends expose the same three methods so the
+ * rest of the game never needs to know which transport is active:
+ *   Sync.createRoom(code, initialState)
+ *   Sync.update(code, partialState)   -- shallow-merges into root object
+ *   Sync.subscribe(code, callback)    -- callback(fullState) on every change
+ *   Sync.roomExists(code, cb)         -- cb(bool)
+ */
+const Sync = (function(){
+  let mode = 'local';
+  let fbApp = null, fbDb = null;
+  let localChannels = {}; // roomCode -> BroadcastChannel
+
+  if (FIREBASE_ENABLED) {
+    try {
+      fbApp = firebase.initializeApp(FIREBASE_CONFIG);
+      fbDb = firebase.database();
+      mode = 'firebase';
+    } catch (e) {
+      console.warn('Firebase init failed, falling back to LocalSync:', e);
+      mode = 'local';
+    }
+  }
+
+  function localKey(code){ return 'bridgetrivia_room_' + code; }
+
+  function getLocalState(code){
+    try {
+      const raw = localStorage.getItem(localKey(code));
+      return raw ? JSON.parse(raw) : null;
+    } catch(e){ return null; }
+  }
+
+  function setLocalState(code, state){
+    localStorage.setItem(localKey(code), JSON.stringify(state));
+    if (!localChannels[code]) {
+      try { localChannels[code] = new BroadcastChannel('bridgetrivia_' + code); } catch(e){ localChannels[code] = null; }
+    }
+    if (localChannels[code]) localChannels[code].postMessage({type:'update', state});
+  }
+
+  return {
+    mode: () => mode,
+
+    createRoom(code, initialState, cb){
+      if (mode === 'firebase') {
+        fbDb.ref('rooms/' + code).set(initialState).then(()=>cb && cb(true)).catch(()=>cb && cb(false));
+      } else {
+        setLocalState(code, initialState);
+        cb && cb(true);
+      }
+    },
+
+    roomExists(code, cb){
+      if (mode === 'firebase') {
+        fbDb.ref('rooms/' + code).once('value').then(snap => cb(snap.exists())).catch(()=>cb(false));
+      } else {
+        cb(!!getLocalState(code));
+      }
+    },
+
+    update(code, partial){
+      if (mode === 'firebase') {
+        fbDb.ref('rooms/' + code).update(partial);
+      } else {
+        const current = getLocalState(code) || {};
+        const merged = Object.assign({}, current, partial);
+        setLocalState(code, merged);
+      }
+    },
+
+    // Deep-set a nested value using a slash path, e.g. "players/p1/score"
+    updatePath(code, path, value){
+      if (mode === 'firebase') {
+        fbDb.ref('rooms/' + code + '/' + path).set(value);
+      } else {
+        const current = getLocalState(code) || {};
+        const parts = path.split('/');
+        let obj = current;
+        for (let i=0;i<parts.length-1;i++){
+          if (!obj[parts[i]]) obj[parts[i]] = {};
+          obj = obj[parts[i]];
+        }
+        obj[parts[parts.length-1]] = value;
+        setLocalState(code, current);
+      }
+    },
+
+    subscribe(code, callback){
+      if (mode === 'firebase') {
+        const ref = fbDb.ref('rooms/' + code);
+        ref.on('value', snap => callback(snap.val()));
+        return () => ref.off();
+      } else {
+        if (!localChannels[code]) {
+          try { localChannels[code] = new BroadcastChannel('bridgetrivia_' + code); } catch(e){ localChannels[code] = null; }
+        }
+        const handler = (e) => { if (e.data && e.data.type === 'update') callback(e.data.state); };
+        if (localChannels[code]) localChannels[code].addEventListener('message', handler);
+        // Fire immediately with current state
+        const existing = getLocalState(code);
+        if (existing) setTimeout(()=>callback(existing), 0);
+        // Cross-tab fallback via storage event (covers some browsers where BroadcastChannel timing is delayed)
+        const storageHandler = (e) => {
+          if (e.key === localKey(code) && e.newValue) callback(JSON.parse(e.newValue));
+        };
+        window.addEventListener('storage', storageHandler);
+        return () => {
+          if (localChannels[code]) localChannels[code].removeEventListener('message', handler);
+          window.removeEventListener('storage', storageHandler);
+        };
+      }
+    }
+  };
+})();
+
+/* ----------------------------------------------------------------------
+   2. TRIVIA DATA
+   ------------------------------------------------------------------------
+   Structure:
+   ERAS = {
+     <eraId>: {
+       id, name, tagline, icon, colorKey (matches [data-era] CSS),
+       cards: [
+         { id, title, questions: { cadet:{q,a}, ensign:{q,a}, commander:{q,a}, admiral:{q,a} } }
+       ]
+     }
+   }
+   DIFFICULTIES defines label + point value + display order.
+
+   ---- ADDING MORE CARDS ----
+   To expand any era beyond the 20 starter cards, copy this template and
+   push it into that era's `cards` array (or paste additional objects
+   directly into the array below at the marked "ADD MORE CARDS HERE" spot):
+
+   {
+     id: "tos21", title: "Your Card Title",
+     questions: {
+       cadet:     { q: "Easy question text?",       a: "Answer." },
+       ensign:    { q: "Medium question text?",      a: "Answer." },
+       commander: { q: "Hard question text?",        a: "Answer." },
+       admiral:   { q: "Extra-hard question text?",  a: "Answer." }
+     }
+   }
+   Card IDs just need to be unique within their era.
+   ---------------------------------------------------------------------- */
+
+const DIFFICULTIES = [
+  { key:'cadet',     label:'Cadet',     points:10 },
+  { key:'ensign',    label:'Ensign',    points:20 },
+  { key:'commander', label:'Commander', points:30 },
+  { key:'admiral',   label:'Admiral',   points:40 }
+];
+
+const ERAS = {
+  tos: {
+    id:'tos', name:'The Original Series Era', tagline:'1966–1991 · Kirk, Spock & the original Enterprise', icon:'TOS',
+    cards:[
+      {id:'tos1',title:'Enterprise NCC-1701',questions:{
+        cadet:{q:'What is the registry number of the original USS Enterprise?',a:'NCC-1701.'},
+        ensign:{q:'What class of starship is the original Enterprise?',a:'Constitution class.'},
+        commander:{q:'Who serves as chief engineer aboard the Enterprise during this era?',a:'Montgomery "Scotty" Scott.'},
+        admiral:{q:'Who commands the Enterprise just before Kirk takes over?',a:'Captain Christopher Pike.'}
+      }},
+      {id:'tos2',title:'Vulcan Philosophy',questions:{
+        cadet:{q:'What is the Vulcan hand gesture that means "live long and prosper" called?',a:'The Vulcan salute.'},
+        ensign:{q:'What Vulcan discipline involves purging all emotion?',a:'Kolinahr.'},
+        commander:{q:'What Vulcan mind technique allows sharing thoughts directly?',a:'The Vulcan mind meld.'},
+        admiral:{q:'What is the name of the Vulcan mating-drive ritual and its combat rite?',a:'Pon farr, resolved through the kal-if-fee combat ritual.'}
+      }},
+      {id:'tos3',title:'The Klingon Empire',questions:{
+        cadet:{q:'What empire is a frequent rival of the Federation in this era?',a:'The Klingon Empire.'},
+        ensign:{q:'Name a Klingon captain who repeatedly clashes with Kirk.',a:'Commander Kor (or Koloth).'},
+        commander:{q:'What treaty eventually eases Klingon-Federation tensions after a mining disaster?',a:'The Khitomer Accords.'},
+        admiral:{q:'What moon\'s destruction sets the stage for Klingon-Federation peace talks?',a:'Praxis.'}
+      }},
+      {id:'tos4',title:'Star Trek: The Motion Picture',questions:{
+        cadet:{q:'What massive cloud entity threatens Earth in this film?',a:'V\'Ger.'},
+        ensign:{q:'What long-lost Starfleet probe merged with a machine world to become V\'Ger?',a:'Voyager 6.'},
+        commander:{q:'What rank does Kirk hold at the start of this film, before retaking command?',a:'Admiral.'},
+        admiral:{q:'What Deltan navigator joins the Enterprise crew in this film?',a:'Ilia.'}
+      }},
+      {id:'tos5',title:'The Wrath of Khan',questions:{
+        cadet:{q:'Who is the genetically engineered villain of this film?',a:'Khan Noonien Singh.'},
+        ensign:{q:'What planet-reshaping device does Khan try to steal?',a:'The Genesis Device.'},
+        commander:{q:'Which character sacrifices himself to save the ship at the film\'s end?',a:'Spock.'},
+        admiral:{q:'What creature does Khan use to torture Chekov?',a:'A Ceti eel.'}
+      }},
+      {id:'tos6',title:'The Search for Spock & The Voyage Home',questions:{
+        cadet:{q:'What planet, created by a life-generating device, regenerates Spock\'s body?',a:'The Genesis Planet.'},
+        ensign:{q:'What ship do the crew steal and later sacrifice to rescue Spock?',a:'The USS Enterprise.'},
+        commander:{q:'What era does the crew travel to in The Voyage Home?',a:'1980s San Francisco.'},
+        admiral:{q:'What animals must they bring to the future to save Earth from an alien probe?',a:'Humpback whales.'}
+      }},
+      {id:'tos7',title:'The Final Frontier & The Undiscovered Country',questions:{
+        cadet:{q:'Who is Spock\'s half-brother, introduced in The Final Frontier?',a:'Sybok.'},
+        ensign:{q:'What legendary planet do they search for in The Final Frontier?',a:'Sha Ka Ree.'},
+        commander:{q:'Who is assassinated, setting off the plot of The Undiscovered Country?',a:'Klingon Chancellor Gorkon.'},
+        admiral:{q:'Who is framed for that assassination?',a:'Kirk and Dr. McCoy.'}
+      }},
+      {id:'tos8',title:'Star Trek: The Animated Series',questions:{
+        cadet:{q:'What was notable about this series\' format compared to live-action Trek?',a:'It was Star Trek\'s first animated series.'},
+        ensign:{q:'Which original cast member returned to voice the communications officer?',a:'Nichelle Nichols as Uhura.'},
+        commander:{q:'What new alien science station officer appears due to a live-action actor\'s unavailability?',a:'Lieutenant Arex.'},
+        admiral:{q:'What feline-like alien communications officer also joins the animated crew?',a:'Lieutenant M\'Ress.'}
+      }},
+      {id:'tos9',title:'The Prime Directive',questions:{
+        cadet:{q:'What is Starfleet\'s core rule against interfering with less advanced cultures called?',a:'The Prime Directive.'},
+        ensign:{q:'What general order number is commonly linked to the Prime Directive?',a:'General Order One.'},
+        commander:{q:'What philosophy underlies the Prime Directive?',a:'Respecting natural cultural development without imposing outside influence.'},
+        admiral:{q:'What is the risk Starfleet officers face for knowingly violating this directive?',a:'Court-martial and severe disciplinary action.'}
+      }},
+      {id:'tos10',title:'The Trouble with Tribbles',questions:{
+        cadet:{q:'What furry creatures multiply uncontrollably in this classic episode?',a:'Tribbles.'},
+        ensign:{q:'What space station is central to this episode?',a:'Deep Space Station K-7.'},
+        commander:{q:'What grain shipment do the tribbles nearly destroy?',a:'Quadrotriticale.'},
+        admiral:{q:'Which Klingon agent is revealed to have poisoned the grain?',a:'Arne Darvin.'}
+      }},
+      {id:'tos11',title:'Mirror, Mirror',questions:{
+        cadet:{q:'What alternate reality do Kirk and crew accidentally visit in this episode?',a:'The Mirror Universe.'},
+        ensign:{q:'What brutal regime does the Mirror Universe\'s Enterprise serve?',a:'The Terran Empire.'},
+        commander:{q:'What distinguishing feature sets Mirror Spock apart visually?',a:'A goatee.'},
+        admiral:{q:'What does Prime Kirk urge Mirror Spock to consider before returning home?',a:'Reforming the Empire from within.'}
+      }},
+      {id:'tos12',title:'Starfleet Command Structure',questions:{
+        cadet:{q:'What rank does James T. Kirk hold as commanding officer of the Enterprise?',a:'Captain.'},
+        ensign:{q:'Who serves as Kirk\'s Vulcan first officer and science officer?',a:'Spock.'},
+        commander:{q:'Who serves as chief medical officer under Kirk?',a:'Dr. Leonard "Bones" McCoy.'},
+        admiral:{q:'What training institution do Starfleet officers graduate from?',a:'Starfleet Academy.'}
+      }},
+      {id:'tos13',title:'Spock\'s Dual Heritage',questions:{
+        cadet:{q:'What is Spock\'s homeworld?',a:'Vulcan.'},
+        ensign:{q:'Who is Spock\'s human parent?',a:'His mother, Amanda Grayson.'},
+        commander:{q:'Who is Spock\'s Vulcan father, an ambassador?',a:'Sarek.'},
+        admiral:{q:'What discipline does Spock briefly attempt to fully embrace pure logic, later abandoning it?',a:'Kolinahr.'}
+      }},
+      {id:'tos14',title:'Scotty & Engineering',questions:{
+        cadet:{q:'What is Scotty\'s job title aboard the Enterprise?',a:'Chief Engineer.'},
+        ensign:{q:'What nationality is Montgomery Scott?',a:'Scottish.'},
+        commander:{q:'What is Scotty famously known for regarding engine repair estimates?',a:'Padding his time estimates to look like a miracle worker.'},
+        admiral:{q:'In Star Trek IV, what mistake does Scotty make with a 20th-century computer?',a:'He speaks into a computer mouse thinking it\'s a microphone.'}
+      }},
+      {id:'tos15',title:'Uhura & Communications',questions:{
+        cadet:{q:'What position does Uhura hold on the bridge?',a:'Communications officer.'},
+        ensign:{q:'What historic television moment involving Uhura and Kirk occurs in "Plato\'s Stepchildren"?',a:'One of American TV\'s first scripted interracial kisses.'},
+        commander:{q:'What rank does Uhura hold by the time of the feature films?',a:'Commander.'},
+        admiral:{q:'What instrument does Uhura often play and sing along with?',a:'A Vulcan-lute-like stringed instrument.'}
+      }},
+      {id:'tos16',title:'Sulu & Chekov',questions:{
+        cadet:{q:'What position does Sulu hold on the bridge?',a:'Helmsman.'},
+        ensign:{q:'What position does Chekov hold on the bridge?',a:'Navigator.'},
+        commander:{q:'What ship does Sulu eventually command in the films?',a:'The USS Excelsior.'},
+        admiral:{q:'What nationality does Chekov proudly credit with many historical inventions?',a:'Russian.'}
+      }},
+      {id:'tos17',title:'The Kobayashi Maru',questions:{
+        cadet:{q:'What is the Kobayashi Maru?',a:'A no-win training simulation at Starfleet Academy.'},
+        ensign:{q:'What scenario does the test simulate?',a:'A disabled civilian ship stranded in hostile Klingon territory.'},
+        commander:{q:'Who is remembered as having found a way to beat the test?',a:'James T. Kirk.'},
+        admiral:{q:'What philosophy does Kirk\'s approach to the test reflect?',a:'A refusal to accept the concept of a no-win scenario.'}
+      }},
+      {id:'tos18',title:'Federation vs. Romulans',questions:{
+        cadet:{q:'What species shares a common ancestry with Vulcans in Trek lore?',a:'Romulans.'},
+        ensign:{q:'What technology allows Romulan ships to vanish from sensors?',a:'The cloaking device.'},
+        commander:{q:'What treaty zone separates Federation and Romulan space?',a:'The Romulan Neutral Zone.'},
+        admiral:{q:'What real-world military tactic inspired the ship duel in "Balance of Terror"?',a:'Submarine warfare.'}
+      }},
+      {id:'tos19',title:'Starfleet Uniforms & Insignia',questions:{
+        cadet:{q:'What color uniform represents command division in this era?',a:'Gold.'},
+        ensign:{q:'What color uniform represents the sciences division?',a:'Blue.'},
+        commander:{q:'What color uniform represents operations and engineering?',a:'Red.'},
+        admiral:{q:'What shape is the standard Starfleet insignia badge from this era based on?',a:'An arrowhead/delta shape.'}
+      }},
+      {id:'tos20',title:'Time Travel: The City on the Edge of Forever',questions:{
+        cadet:{q:'What historical era does the crew visit in this episode?',a:'1930s Depression-era Earth.'},
+        ensign:{q:'What device grants access to different points in time?',a:'The Guardian of Forever.'},
+        commander:{q:'Who must Kirk let die to preserve the timeline?',a:'Edith Keeler.'},
+        admiral:{q:'Which crew member accidentally alters history, prompting Kirk and Spock to follow him back?',a:'Dr. McCoy.'}
+      }}
+      // ---- ADD MORE TOS-ERA CARDS HERE (copy the template above ERAS) ----
+    ]
+  },
+
+  tng: {
+    id:'tng', name:'The Next Generation Era', tagline:'1987–2002 · TNG, DS9, Voyager & the 24th-century films', icon:'TNG',
+    cards:[
+      {id:'tng1',title:'Captain Picard',questions:{
+        cadet:{q:'What starship does Captain Picard command in TNG?',a:'USS Enterprise-D.'},
+        ensign:{q:'What archaeological hobby does Picard enjoy?',a:'Archaeology.'},
+        commander:{q:'What is Picard\'s catchphrase when giving the order to proceed?',a:'"Make it so."'},
+        admiral:{q:'What alien collective temporarily assimilates Picard?',a:'The Borg, as Locutus.'}
+      }},
+      {id:'tng2',title:'Data, the Android',questions:{
+        cadet:{q:'What type of being is Lieutenant Commander Data?',a:'An android.'},
+        ensign:{q:'What does Data lack and spend the series trying to understand?',a:'Emotions.'},
+        commander:{q:'Who is Data\'s "brother" android with an unstable emotion chip?',a:'Lore.'},
+        admiral:{q:'What component does Data eventually receive and begin using?',a:'An emotion chip.'}
+      }},
+      {id:'tng3',title:'Worf & Klingon Honor',questions:{
+        cadet:{q:'What species is Lieutenant Worf?',a:'Klingon.'},
+        ensign:{q:'Who raised Worf after his parents died in a Klingon-Romulan attack?',a:'Human adoptive parents on Earth.'},
+        commander:{q:'What Klingon house does Worf belong to?',a:'The House of Mogh.'},
+        admiral:{q:'What diplomatic role does Worf later hold on Deep Space Nine?',a:'Federation liaison to the Klingon Empire.'}
+      }},
+      {id:'tng4',title:'Riker & Troi',questions:{
+        cadet:{q:'Who serves as Picard\'s first officer on the Enterprise-D?',a:'Commander William Riker.'},
+        ensign:{q:'What telepathic species is Counselor Troi descended from?',a:'Betazoid.'},
+        commander:{q:'What instrument does Riker enjoy playing?',a:'The trombone.'},
+        admiral:{q:'What command does Riker eventually receive by the time of Star Trek: Nemesis?',a:'Captain of the USS Titan.'}
+      }},
+      {id:'tng5',title:'Geordi & Engineering',questions:{
+        cadet:{q:'What device does Geordi La Forge use to see, due to his blindness?',a:'A VISOR.'},
+        ensign:{q:'What position does Geordi hold aboard the Enterprise-D?',a:'Chief Engineer.'},
+        commander:{q:'What holodeck character, created for fun, becomes unexpectedly sentient?',a:'Professor Moriarty.'},
+        admiral:{q:'What rank does Geordi hold by Star Trek: Nemesis?',a:'Commander.'}
+      }},
+      {id:'tng6',title:'Deep Space Nine: Sisko',questions:{
+        cadet:{q:'What space station does Captain Sisko command?',a:'Deep Space Nine.'},
+        ensign:{q:'What stable wormhole is discovered near the station?',a:'The Bajoran wormhole.'},
+        commander:{q:'Who do the Bajorans believe the wormhole aliens to be?',a:'The Prophets.'},
+        admiral:{q:'What title do the Bajorans eventually give Sisko?',a:'The Emissary of the Prophets.'}
+      }},
+      {id:'tng7',title:'DS9: Odo & Quark',questions:{
+        cadet:{q:'What type of being is security chief Odo?',a:'A shapeshifter, or Changeling.'},
+        ensign:{q:'What species is the station\'s bar owner, Quark?',a:'Ferengi.'},
+        commander:{q:'What group of shapeshifters does Odo learn he originates from?',a:'The Founders / the Great Link.'},
+        admiral:{q:'What Ferengi guidebook does Quark frequently reference?',a:'The Rules of Acquisition.'}
+      }},
+      {id:'tng8',title:'DS9: The Dominion War',questions:{
+        cadet:{q:'What quadrant do the antagonistic Dominion originate from?',a:'The Gamma Quadrant.'},
+        ensign:{q:'What genetically engineered soldiers serve the Dominion?',a:'The Jem\'Hadar.'},
+        commander:{q:'What Cardassian tailor is revealed to be a former spy on the station?',a:'Elim Garak.'},
+        admiral:{q:'What major battle effectively ends the Dominion War?',a:'The Battle/Fall of Cardassia.'}
+      }},
+      {id:'tng9',title:'Voyager: Janeway',questions:{
+        cadet:{q:'What starship does Captain Janeway command?',a:'USS Voyager.'},
+        ensign:{q:'What distant quadrant does Voyager become stranded in?',a:'The Delta Quadrant.'},
+        commander:{q:'What former Maquis crew member becomes Janeway\'s first officer?',a:'Chakotay.'},
+        admiral:{q:'Roughly how many years does the journey home initially appear to require?',a:'About 75 years.'}
+      }},
+      {id:'tng10',title:'Voyager: Seven of Nine & The Doctor',questions:{
+        cadet:{q:'What former Borg drone joins Voyager\'s crew?',a:'Seven of Nine.'},
+        ensign:{q:'What is unique about Voyager\'s chief medical officer?',a:'He is a hologram, the Emergency Medical Hologram.'},
+        commander:{q:'What human family was Seven of Nine born into before assimilation?',a:'The Hansen family.'},
+        admiral:{q:'What holo-novel does The Doctor create to express his creativity?',a:'"Photons Be Free."'}
+      }},
+      {id:'tng11',title:'Star Trek Generations',questions:{
+        cadet:{q:'Which two captains meet across time in this film?',a:'Kirk and Picard.'},
+        ensign:{q:'What mysterious energy ribbon is central to the plot?',a:'The Nexus.'},
+        commander:{q:'What villain seeks to enter the Nexus at any cost?',a:'Dr. Tolian Soran.'},
+        admiral:{q:'What iconic ship is destroyed in this film?',a:'The USS Enterprise-D.'}
+      }},
+      {id:'tng12',title:'Star Trek: First Contact',questions:{
+        cadet:{q:'What antagonists travel back in time in this film?',a:'The Borg.'},
+        ensign:{q:'What historic Earth event do the Borg try to prevent?',a:'Zefram Cochrane\'s first warp flight.'},
+        commander:{q:'What is the name of the Borg leader introduced in this film?',a:'The Borg Queen.'},
+        admiral:{q:'What ship does Picard command in this film?',a:'USS Enterprise-E.'}
+      }},
+      {id:'tng13',title:'Insurrection & Nemesis',questions:{
+        cadet:{q:'What planet\'s regenerative rings are exploited in Insurrection?',a:'The Ba\'ku homeworld.'},
+        ensign:{q:'What Romulan political figure confronts Picard in Nemesis?',a:'Praetor Shinzon.'},
+        commander:{q:'What is Shinzon revealed to genetically be?',a:'A clone of Picard.'},
+        admiral:{q:'Which android character sacrifices himself in Nemesis?',a:'Data.'}
+      }},
+      {id:'tng14',title:'The Borg Collective',questions:{
+        cadet:{q:'What phrase do the Borg use to declare assimilation inevitable?',a:'"Resistance is futile."'},
+        ensign:{q:'What term describes the Borg\'s networked hive mind?',a:'The Collective.'},
+        commander:{q:'What do the Borg forcibly add to their victims?',a:'Cybernetic implants.'},
+        admiral:{q:'What individual designation was given to Seven of Nine while assimilated?',a:'Tertiary Adjunct of Unimatrix Zero One.'}
+      }},
+      {id:'tng15',title:'The Q Continuum',questions:{
+        cadet:{q:'What omnipotent being frequently torments Picard\'s crew?',a:'Q.'},
+        ensign:{q:'What is the name of the extra-dimensional group Q belongs to?',a:'The Q Continuum.'},
+        commander:{q:'What question does Q put humanity on trial for in the series premiere?',a:'Whether humanity is a dangerous, savage species.'},
+        admiral:{q:'Which Voyager captain does Q also frequently interact with?',a:'Captain Janeway.'}
+      }},
+      {id:'tng16',title:'LCARS & Starship Design',questions:{
+        cadet:{q:'What is the Enterprise-D\'s computer interface system called?',a:'LCARS.'},
+        ensign:{q:'What ship class is the Enterprise-D?',a:'Galaxy class.'},
+        commander:{q:'What feature lets the Enterprise-D\'s saucer section detach?',a:'Saucer separation.'},
+        admiral:{q:'What recreational deck lets crew simulate any environment?',a:'The holodeck.'}
+      }},
+      {id:'tng17',title:'Starfleet Diplomacy',questions:{
+        cadet:{q:'What former enemies of the Federation become uneasy allies through much of TNG?',a:'The Klingon Empire.'},
+        ensign:{q:'What treaty underpins the Klingon-Federation peace referenced throughout TNG?',a:'The Khitomer Accords.'},
+        commander:{q:'What species creates ongoing tension with the Federation near Bajor?',a:'The Cardassians.'},
+        admiral:{q:'What formal role does Picard serve when resolving a Klingon succession crisis?',a:'Arbiter of Succession.'}
+      }},
+      {id:'tng18',title:'Miles O\'Brien',questions:{
+        cadet:{q:'What job does Miles O\'Brien hold aboard the Enterprise-D and later DS9?',a:'Transporter chief, later chief of operations.'},
+        ensign:{q:'What is O\'Brien\'s wife\'s profession?',a:'Botanist and schoolteacher.'},
+        commander:{q:'What harrowing episode has O\'Brien experience a simulated 20-year prison sentence?',a:'"Hard Time."'},
+        admiral:{q:'What enlisted rank does O\'Brien hold for much of the series?',a:'Chief Petty Officer.'}
+      }},
+      {id:'tng19',title:'Guinan & Ten Forward',questions:{
+        cadet:{q:'What lounge aboard the Enterprise-D serves as a social hub?',a:'Ten Forward.'},
+        ensign:{q:'What mysterious, long-lived bartender runs Ten Forward?',a:'Guinan.'},
+        commander:{q:'What species is Guinan?',a:'El-Aurian.'},
+        admiral:{q:'What catastrophic event scattered Guinan\'s people across the galaxy?',a:'Borg attacks on the El-Aurian homeworld.'}
+      }},
+      {id:'tng20',title:'The Maquis',questions:{
+        cadet:{q:'What rebel group of former Federation colonists opposes a treaty with Cardassia?',a:'The Maquis.'},
+        ensign:{q:'What former Starfleet officer leads a Maquis cell important to Voyager\'s crew?',a:'Chakotay.'},
+        commander:{q:'What kind of dispute originally sparks the Maquis conflict?',a:'A border-colony treaty dispute with Cardassia.'},
+        admiral:{q:'Which Voyager officer is revealed to have been an undercover operative before the crews merged?',a:'Tuvok.'}
+      }}
+      // ---- ADD MORE TNG-ERA CARDS HERE ----
+    ]
+  },
+
+  ent: {
+    id:'ent', name:'The Enterprise Era', tagline:'Early 2000s · Humanity\'s first deep-space missions', icon:'ENT',
+    cards:[
+      {id:'ent1',title:'Captain Archer',questions:{
+        cadet:{q:'Who commands the first Enterprise, NX-01?',a:'Captain Jonathan Archer.'},
+        ensign:{q:'What animal companion travels with Archer?',a:'His dog, Porthos.'},
+        commander:{q:'What program did Archer\'s father help develop before the series begins?',a:'The Warp Five engine program.'},
+        admiral:{q:'What high political office is Archer later associated with in Trek history?',a:'President of the United Federation of Planets.'}
+      }},
+      {id:'ent2',title:'T\'Pol',questions:{
+        cadet:{q:'What species is T\'Pol, the science officer aboard NX-01?',a:'Vulcan.'},
+        ensign:{q:'What organization does T\'Pol initially serve as a liaison for?',a:'The Vulcan High Command.'},
+        commander:{q:'What substance does T\'Pol develop a dependency on during the series?',a:'Trellium-D.'},
+        admiral:{q:'What rank does T\'Pol eventually achieve?',a:'Commander.'}
+      }},
+      {id:'ent3',title:'Trip Tucker',questions:{
+        cadet:{q:'What position does Charles "Trip" Tucker III hold aboard NX-01?',a:'Chief Engineer.'},
+        ensign:{q:'What U.S. state is Trip originally from?',a:'Florida.'},
+        commander:{q:'What unusual medical situation does Trip experience with an alien species?',a:'He becomes pregnant via an alien procedure.'},
+        admiral:{q:'How does Trip\'s story conclude in the series finale?',a:'He is killed during a rescue mission.'}
+      }},
+      {id:'ent4',title:'Doctor Phlox',questions:{
+        cadet:{q:'What species is the NX-01\'s doctor, Phlox?',a:'Denobulan.'},
+        ensign:{q:'What unusual medical practice does Phlox use involving live creatures?',a:'Keeping various alien animals in sickbay for treatments.'},
+        commander:{q:'What is notable about Denobulan family/marriage structures, as Phlox mentions?',a:'Denobulans commonly practice polygamy.'},
+        admiral:{q:'What core personal philosophy guides Phlox\'s medicine and diplomacy?',a:'Open-minded Denobulan pacifism.'}
+      }},
+      {id:'ent5',title:'Malcolm Reed',questions:{
+        cadet:{q:'What role does Malcolm Reed hold aboard NX-01?',a:'Armory Officer (tactical/security).'},
+        ensign:{q:'What nationality is Malcolm Reed?',a:'British.'},
+        commander:{q:'What personal fear does Reed humorously admit to during the series?',a:'A fear of spiders.'},
+        admiral:{q:'What kind of intelligence background is hinted at for Reed?',a:'Ties to a covert British/Starfleet intelligence background.'}
+      }},
+      {id:'ent6',title:'Hoshi Sato',questions:{
+        cadet:{q:'What position does Ensign Hoshi Sato hold aboard NX-01?',a:'Communications officer and linguist.'},
+        ensign:{q:'What skill is Hoshi especially renowned for?',a:'Exceptional multilingual ability.'},
+        commander:{q:'What technology does Hoshi help pioneer for the crew?',a:'Early universal translator development.'},
+        admiral:{q:'What was Hoshi\'s civilian career before joining Starfleet?',a:'A linguistics professor.'}
+      }},
+      {id:'ent7',title:'Travis Mayweather',questions:{
+        cadet:{q:'What position does Travis Mayweather hold aboard NX-01?',a:'Helmsman.'},
+        ensign:{q:'What unusual childhood background does Travis have?',a:'He was born and raised aboard a cargo freighter.'},
+        commander:{q:'What term describes people raised aboard freighters like Travis?',a:'"Boomers."'},
+        admiral:{q:'What gives Travis deep familiarity with deep-space life before Starfleet?',a:'Years spent traveling between colonies on freighters.'}
+      }},
+      {id:'ent8',title:'The NX-01 Enterprise',questions:{
+        cadet:{q:'What registry number does the first Enterprise carry?',a:'NX-01.'},
+        ensign:{q:'What is notable about NX-01\'s warp capability compared to earlier Earth ships?',a:'It is Earth\'s first ship capable of sustained Warp 5.'},
+        commander:{q:'What engine breakthrough enables NX-01\'s mission?',a:'The Warp Five engine.'},
+        admiral:{q:'What organization funds and oversees NX-01\'s construction?',a:'United Earth Starfleet.'}
+      }},
+      {id:'ent9',title:'Vulcan-Human Relations',questions:{
+        cadet:{q:'What species closely oversees early human space exploration?',a:'The Vulcans.'},
+        ensign:{q:'What is the general Vulcan attitude toward humanity\'s readiness for deep space early in the series?',a:'Skepticism, viewing humans as impulsive.'},
+        commander:{q:'What kind of events help improve Vulcan-human trust over the series?',a:'Joint missions and shared crises.'},
+        admiral:{q:'What eventual alliance do Vulcans and Humans help found?',a:'The United Federation of Planets.'}
+      }},
+      {id:'ent10',title:'The Temporal Cold War',questions:{
+        cadet:{q:'What ongoing shadowy conflict threads through Enterprise\'s early seasons?',a:'The Temporal Cold War.'},
+        ensign:{q:'What genetically enhanced species serves as agents in this conflict?',a:'The Suliban.'},
+        commander:{q:'What group organizes the Suliban into a fighting force?',a:'The Cabal.'},
+        admiral:{q:'What mysterious figure secretly manipulates events across time in this arc?',a:'"Future Guy."'}
+      }},
+      {id:'ent11',title:'The Xindi Arc',questions:{
+        cadet:{q:'What multi-species alliance attacks Earth directly in season three?',a:'The Xindi.'},
+        ensign:{q:'What region of space do Archer and crew search through during this arc?',a:'The Delphic Expanse.'},
+        commander:{q:'What kind of weapon do the Xindi initially use against Earth?',a:'A devastating probe attack.'},
+        admiral:{q:'What ultimately convinces the Xindi to abandon their plan to destroy Earth?',a:'Evidence that humanity isn\'t the true threat, exposing a hidden manipulator.'}
+      }},
+      {id:'ent12',title:'Andorians',questions:{
+        cadet:{q:'What blue-skinned, antennaed species frequently clashes and later allies with humans?',a:'The Andorians.'},
+        ensign:{q:'What is the name of the recurring Andorian officer allied with Archer?',a:'Shran.'},
+        commander:{q:'What species do Andorians have a long-standing rivalry with?',a:'The Vulcans.'},
+        admiral:{q:'What alliance do Andorians eventually help form alongside Earth and Vulcan?',a:'The founding coalition of the Federation.'}
+      }},
+      {id:'ent13',title:'The Klingon Augment Virus',questions:{
+        cadet:{q:'What genetic experiment causes a plague among Klingons in this era?',a:'An augment-based virus.'},
+        ensign:{q:'What physical Klingon trait is famously altered by this virus?',a:'Loss of forehead ridges.'},
+        commander:{q:'What earlier genetic program is linked to the virus\'s origin?',a:'Human augment experiments building on Eugenics-era DNA.'},
+        admiral:{q:'How is the virus eventually addressed?',a:'A cure is developed, though ridges return gradually over generations.'}
+      }},
+      {id:'ent14',title:'The MACOs',questions:{
+        cadet:{q:'What military unit is assigned to NX-01 during the Xindi crisis?',a:'MACOs (Military Assault Command Operations).'},
+        ensign:{q:'What is the MACOs\' primary role aboard the ship?',a:'Ground combat and security support.'},
+        commander:{q:'What kind of friction does the MACO presence create aboard ship?',a:'Tension between military and Starfleet command cultures.'},
+        admiral:{q:'What MACO officer plays a recurring leadership role during this arc?',a:'Major Hayes.'}
+      }},
+      {id:'ent15',title:'The Warp Five Program',questions:{
+        cadet:{q:'Whose historic flight is credited with humanity\'s first warp travel, predating this program?',a:'Zefram Cochrane.'},
+        ensign:{q:'Who leads the Warp Five engine program that Archer\'s father worked on?',a:'Henry Archer.'},
+        commander:{q:'What species offers scientific consultation on refining the Warp Five engine?',a:'The Vulcans.'},
+        admiral:{q:'What mission finally proves the Warp Five engine viable, launching the series?',a:'NX-01\'s maiden voyage under Captain Archer.'}
+      }},
+      {id:'ent16',title:'Founding the Federation',questions:{
+        cadet:{q:'What major interstellar body is founded near the end of the Enterprise era?',a:'The United Federation of Planets.'},
+        ensign:{q:'Name two of the four species typically cited as Federation founders besides Humans.',a:'Vulcans and Andorians (also Tellarites).'},
+        commander:{q:'What earlier organization evolves into Starfleet as later eras know it?',a:'United Earth Starfleet.'},
+        admiral:{q:'What kind of gathering is depicted as key to the Federation\'s founding in the finale?',a:'A founding diplomatic conference/charter signing.'}
+      }},
+      {id:'ent17',title:'T\'Pol\'s Role Aboard NX-01',questions:{
+        cadet:{q:'What rank does T\'Pol initially hold when assigned to NX-01?',a:'Sub-Commander.'},
+        ensign:{q:'What organization assigns T\'Pol to observe the human crew at first?',a:'The Vulcan High Command.'},
+        commander:{q:'What personal shift does T\'Pol undergo regarding emotional expression over the series?',a:'She becomes noticeably more open, partly due to Trellium-D exposure.'},
+        admiral:{q:'What eventual Starfleet status does T\'Pol hold by the series\' end?',a:'A fully commissioned Starfleet officer.'}
+      }},
+      {id:'ent18',title:'Tellarites & Early Alien Relations',questions:{
+        cadet:{q:'What gruff, debate-loving species is among the Federation\'s founding members?',a:'Tellarites.'},
+        ensign:{q:'What is a defining cultural trait of Tellarites regarding conversation?',a:'They enjoy vigorous arguing as a cultural norm.'},
+        commander:{q:'Alongside Vulcans and Andorians, what role do Tellarites play in Federation founding talks?',a:'One of the four founding member species.'},
+        admiral:{q:'What kind of diplomatic tradition involving these species becomes more prominent in later eras?',a:'Multi-species conferences resembling the later Babel-style summits.'}
+      }},
+      {id:'ent19',title:'The Delphic Expanse',questions:{
+        cadet:{q:'What dangerous, anomaly-filled region does NX-01 explore during the Xindi arc?',a:'The Delphic Expanse.'},
+        ensign:{q:'What makes this region hazardous to navigate?',a:'Unpredictable spatial anomalies.'},
+        commander:{q:'What faction secretly manipulates events within the Expanse?',a:'The Sphere Builders.'},
+        admiral:{q:'What structures does this faction use to reshape the Expanse\'s space?',a:'Massive spheres altering spatial properties.'}
+      }},
+      {id:'ent20',title:'The Series Finale',questions:{
+        cadet:{q:'What framing device is used in the finale, "These Are the Voyages..."?',a:'A holodeck recreation viewed by TNG-era characters.'},
+        ensign:{q:'Which major NX-01 character dies during the events depicted in the finale?',a:'Trip Tucker.'},
+        commander:{q:'What historic event does the finale tie into, framing Archer\'s legacy?',a:'The signing of the Federation charter.'},
+        admiral:{q:'What long-term reputation does the finale suggest for Archer?',a:'A founding figure central to the Federation\'s creation.'}
+      }}
+      // ---- ADD MORE ENTERPRISE-ERA CARDS HERE ----
+    ]
+  },
+
+  kelvin: {
+    id:'kelvin', name:'The Kelvin Timeline Era', tagline:'2009–2016 · The alternate-reality film reboot trilogy', icon:'KEL',
+    cards:[
+      {id:'kel1',title:'The USS Kelvin',questions:{
+        cadet:{q:'What Starfleet ship is attacked in the opening of the 2009 film, giving the timeline its name?',a:'The USS Kelvin.'},
+        ensign:{q:'Who commands the Kelvin during the attack and sacrifices himself?',a:'George Kirk.'},
+        commander:{q:'What Romulan ship attacks the Kelvin?',a:'The Narada.'},
+        admiral:{q:'What significant birth occurs during the attack?',a:'James T. Kirk is born aboard a shuttle.'}
+      }},
+      {id:'kel2',title:'Nero\'s Vendetta',questions:{
+        cadet:{q:'Who is the vengeful Romulan antagonist of the 2009 film?',a:'Nero.'},
+        ensign:{q:'What catastrophe does Nero blame Spock (Prime) for failing to prevent?',a:'The destruction of Romulus by a supernova.'},
+        commander:{q:'What substance does Nero use to create black holes as weapons?',a:'Red matter.'},
+        admiral:{q:'What happens to the Narada at the film\'s climax?',a:'It\'s destroyed after being pulled into a red-matter black hole.'}
+      }},
+      {id:'kel3',title:'Kirk & Spock, Reintroduced',questions:{
+        cadet:{q:'Who portrays young James T. Kirk in the Kelvin timeline films?',a:'Chris Pine.'},
+        ensign:{q:'Who portrays Spock in the Kelvin timeline films?',a:'Zachary Quinto.'},
+        commander:{q:'What Starfleet Academy test does young Kirk famously reprogram?',a:'The Kobayashi Maru.'},
+        admiral:{q:'What planet\'s destruction personally devastates Spock in the 2009 film?',a:'Vulcan.'}
+      }},
+      {id:'kel4',title:'Vulcan\'s Destruction',questions:{
+        cadet:{q:'What iconic planet is destroyed by Nero\'s red matter weapon?',a:'Vulcan.'},
+        ensign:{q:'Which Vulcan ambassador and Spock relative survives the planet\'s destruction?',a:'Sarek.'},
+        commander:{q:'What happens to Spock\'s mother, Amanda Grayson, during this event?',a:'She dies during the planet\'s destruction.'},
+        admiral:{q:'How does Vulcan\'s destruction affect the species afterward?',a:'They face near-extinction and turn to colonization efforts.'}
+      }},
+      {id:'kel5',title:'Delta Vega',questions:{
+        cadet:{q:'What icy planet does Kirk get marooned on in the 2009 film?',a:'Delta Vega.'},
+        ensign:{q:'Who does Kirk meet in a cave on Delta Vega?',a:'Spock Prime.'},
+        commander:{q:'What kind of creature chases Kirk across the ice there?',a:'A large predatory alien creature.'},
+        admiral:{q:'What does Kirk find stationed on Delta Vega besides Spock Prime?',a:'A remote Starfleet outpost, where he finds Scotty.'}
+      }},
+      {id:'kel6',title:'Star Trek Into Darkness',questions:{
+        cadet:{q:'What alias does the film\'s genetically engineered antagonist initially use?',a:'John Harrison.'},
+        ensign:{q:'Who portrays Khan in this film?',a:'Benedict Cumberbatch.'},
+        commander:{q:'What Starfleet admiral secretly conspires with Khan for militaristic purposes?',a:'Admiral Alexander Marcus.'},
+        admiral:{q:'What secret warship does Admiral Marcus build for conflict with the Klingons?',a:'The USS Vengeance.'}
+      }},
+      {id:'kel7',title:'Khan\'s Frozen Crew',questions:{
+        cadet:{q:'What does Khan want to protect that motivates much of his plan?',a:'His cryogenically frozen fellow augments.'},
+        ensign:{q:'How many of Khan\'s people are hidden inside torpedoes aboard the Enterprise?',a:'72.'},
+        commander:{q:'What sacrifice does Kirk make in this film, echoing a classic TOS moment?',a:'He sacrifices himself to save the ship from radiation exposure.'},
+        admiral:{q:'What is used to revive Kirk afterward?',a:'Khan\'s regenerative blood.'}
+      }},
+      {id:'kel8',title:'Star Trek Beyond',questions:{
+        cadet:{q:'What new villain, formerly Starfleet, antagonizes the crew in this film?',a:'Krall.'},
+        ensign:{q:'What space station serves as the film\'s primary setting?',a:'Starbase Yorktown.'},
+        commander:{q:'Who is Krall ultimately revealed to actually be?',a:'Balthazar Edison, a presumed-dead Starfleet officer.'},
+        admiral:{q:'What scavenger alien ally helps the crew survive on Krall\'s planet?',a:'Jaylah.'}
+      }},
+      {id:'kel9',title:'The Enterprise, Rebuilt',questions:{
+        cadet:{q:'What ship does Kirk ultimately command in the Kelvin timeline films?',a:'The USS Enterprise.'},
+        ensign:{q:'What happens to the Enterprise in Star Trek Beyond?',a:'It is destroyed by Krall\'s swarm ships.'},
+        commander:{q:'What replacement ship is under construction at the end of Beyond?',a:'The USS Enterprise-A.'},
+        admiral:{q:'What shipyard is shown constructing the Enterprise in the 2009 film?',a:'The Riverside Shipyard in Iowa.'}
+      }},
+      {id:'kel10',title:'Spock Prime\'s Role',questions:{
+        cadet:{q:'What older, alternate-timeline version of Spock appears in these films?',a:'Spock Prime.'},
+        ensign:{q:'What event caused Spock Prime to end up in the past, creating the new timeline?',a:'Chasing Nero\'s ship through a black hole while trying to stop a supernova.'},
+        commander:{q:'What key advice does Spock Prime give young Kirk about taking command?',a:'To trust his instincts and prove himself through the moment, not by rules alone.'},
+        admiral:{q:'What happens to Spock Prime by the time of Star Trek Beyond?',a:'He passes away of natural causes.'}
+      }},
+      {id:'kel11',title:'Uhura, Reimagined',questions:{
+        cadet:{q:'Who portrays Uhura in the Kelvin timeline films?',a:'Zoe Saldana.'},
+        ensign:{q:'What relationship develops between Uhura and Spock in this timeline?',a:'A romantic relationship.'},
+        commander:{q:'What specialized linguistic skill makes Uhura especially valuable to the crew?',a:'Fluency in multiple alien languages, including Romulan.'},
+        admiral:{q:'What position does Uhura hold aboard the Enterprise?',a:'Communications officer.'}
+      }},
+      {id:'kel12',title:'Scotty, Reimagined',questions:{
+        cadet:{q:'Who portrays Scotty in the Kelvin timeline films?',a:'Simon Pegg.'},
+        ensign:{q:'Where does Kirk first find Scotty stationed?',a:'A remote outpost on Delta Vega.'},
+        commander:{q:'What theoretical transporter concept had Scotty already developed before joining the crew?',a:'Transwarp beaming theory.'},
+        admiral:{q:'What small alien companion assists Scotty throughout the films?',a:'Keenser.'}
+      }},
+      {id:'kel13',title:'Alternate Timeline Mechanics',questions:{
+        cadet:{q:'What term describes the new timeline created by Nero\'s incursion into the past?',a:'The Kelvin timeline.'},
+        ensign:{q:'Name one major event that diverges in this timeline compared to the original.',a:'George Kirk\'s death aboard the Kelvin.'},
+        commander:{q:'What substance is central to enabling time travel in this saga?',a:'Red matter.'},
+        admiral:{q:'How do the films generally explain the coexistence of a "Prime" and "Kelvin" timeline?',a:'Time travel branches off a new alternate reality rather than overwriting the original.'}
+      }},
+      {id:'kel14',title:'Starfleet Academy, Reimagined',questions:{
+        cadet:{q:'Where does young Kirk enroll after a bar fight convinces him to join Starfleet?',a:'Starfleet Academy.'},
+        ensign:{q:'How quickly does Kirk complete the Academy program?',a:'In three years instead of the standard four.'},
+        commander:{q:'What relationship does Kirk have with Captain Pike in this timeline?',a:'Pike recruits and mentors him.'},
+        admiral:{q:'What happens to Captain Pike in Star Trek Into Darkness?',a:'He is killed by Khan.'}
+      }},
+      {id:'kel15',title:'Christopher Pike, Reimagined',questions:{
+        cadet:{q:'Who commands the Enterprise before Kirk takes over in the 2009 film?',a:'Captain Christopher Pike.'},
+        ensign:{q:'What happens to Pike by the events of Into Darkness?',a:'He is critically injured and later dies from Khan\'s attack.'},
+        commander:{q:'What role does Pike serve for young Kirk\'s development?',a:'A mentor who challenges Kirk to live up to his potential.'},
+        admiral:{q:'What rank does Pike hold when he first meets Kirk in a bar?',a:'Captain.'}
+      }},
+      {id:'kel16',title:'Red Matter & Black Holes',questions:{
+        cadet:{q:'What substance can instantly create a black hole when triggered?',a:'Red matter.'},
+        ensign:{q:'Who possesses red matter technology, intending to stop a supernova?',a:'Ambassador Spock (Prime).'},
+        commander:{q:'What stellar event triggers the need for red matter\'s use?',a:'A supernova threatening the galaxy.'},
+        admiral:{q:'What unintended consequence results from red matter\'s use against the supernova?',a:'It creates a black hole pulling ships into the past.'}
+      }},
+      {id:'kel17',title:'The USS Vengeance',questions:{
+        cadet:{q:'What secret dreadnought-class starship does Admiral Marcus construct?',a:'The USS Vengeance.'},
+        ensign:{q:'What is the Vengeance\'s intended purpose, according to Marcus?',a:'To wage war against the Klingon Empire.'},
+        commander:{q:'Who commandeers the Vengeance during its climactic battle?',a:'Khan.'},
+        admiral:{q:'What happens to the Vengeance by the end of Into Darkness?',a:'It crashes into San Francisco.'}
+      }},
+      {id:'kel18',title:'Jaylah & the Franklin',questions:{
+        cadet:{q:'What scavenger character helps the crew survive on Krall\'s planet in Beyond?',a:'Jaylah.'},
+        ensign:{q:'What crashed ship does Jaylah live inside, cleverly camouflaged?',a:'The USS Franklin.'},
+        commander:{q:'What kind of technology does Jaylah use to remain hidden from Krall\'s forces?',a:'Improvised holographic camouflage.'},
+        admiral:{q:'What does Jaylah aspire to do by the end of the film?',a:'Enroll in Starfleet Academy.'}
+      }},
+      {id:'kel19',title:'Starbase Yorktown',questions:{
+        cadet:{q:'What unique architectural design does Starbase Yorktown have?',a:'A spherical, snow-globe-like interior cityscape.'},
+        ensign:{q:'What is Yorktown\'s general role for Starfleet?',a:'A remote deep-space base for exploration and defense.'},
+        commander:{q:'What crisis forces the Enterprise crew to seek refuge at Yorktown?',a:'Krall\'s attack that destroys the Enterprise.'},
+        admiral:{q:'What kind of weapon does Krall attempt to unleash on Yorktown?',a:'A swarm-based bioweapon.'}
+      }},
+      {id:'kel20',title:'McCoy, Reimagined',questions:{
+        cadet:{q:'Who portrays Dr. Leonard McCoy in the Kelvin timeline films?',a:'Karl Urban.'},
+        ensign:{q:'What nickname is McCoy affectionately known by among the crew?',a:'"Bones."'},
+        commander:{q:'What personal history does McCoy reveal led him to join Starfleet?',a:'A difficult divorce that left him with little else.'},
+        admiral:{q:'What recurring comedic dynamic exists between McCoy and Spock?',a:'Their clashing logical vs. emotional worldviews.'}
+      }}
+      // ---- ADD MORE KELVIN-TIMELINE CARDS HERE ----
+    ]
+  },
+
+  modern: {
+    id:'modern', name:'The Modern Era', tagline:'2017–Present · Discovery, Picard, Strange New Worlds & beyond', icon:'MOD',
+    cards:[
+      {id:'mod1',title:'Michael Burnham',questions:{
+        cadet:{q:'Who is the main protagonist of Star Trek: Discovery?',a:'Michael Burnham.'},
+        ensign:{q:'What species raised Burnham after her parents\' deaths?',a:'Vulcans, raised by Sarek.'},
+        commander:{q:'What rank/role does Burnham eventually rise to on the show?',a:'Captain of the USS Discovery.'},
+        admiral:{q:'What action does Burnham take early in the series that leads to her imprisonment?',a:'An attempted mutiny before a Klingon conflict.'}
+      }},
+      {id:'mod2',title:'USS Discovery & the Spore Drive',questions:{
+        cadet:{q:'What experimental propulsion system does the USS Discovery use?',a:'The spore drive.'},
+        ensign:{q:'What officer\'s unique biology allows him to interface with the spore drive?',a:'Paul Stamets.'},
+        commander:{q:'What network of fungal-based pathways does the spore drive travel through?',a:'The mycelial network.'},
+        admiral:{q:'What far-future time period does Discovery\'s crew relocate to in later seasons?',a:'The 32nd century.'}
+      }},
+      {id:'mod3',title:'Captain Georgiou',questions:{
+        cadet:{q:'Who is Burnham\'s mentor and captain aboard the USS Shenzhou?',a:'Philippa Georgiou.'},
+        ensign:{q:'What alternate-universe counterpart of Georgiou becomes a major character?',a:'The Mirror Universe Emperor Georgiou.'},
+        commander:{q:'What secretive organization does Mirror Georgiou eventually join?',a:'Section 31.'},
+        admiral:{q:'What happens to the Prime Georgiou early in the series?',a:'She is killed by Klingons in the Battle of the Binary Stars.'}
+      }},
+      {id:'mod4',title:'Saru',questions:{
+        cadet:{q:'What species is Commander/Captain Saru, known for heightened threat-sensing?',a:'Kelpien.'},
+        ensign:{q:'What organ do Kelpiens possess that reacts to danger?',a:'Threat ganglia.'},
+        commander:{q:'What rank does Saru eventually achieve aboard Discovery?',a:'Captain.'},
+        admiral:{q:'What biological transformation does Saru undergo mid-series?',a:'Losing his threat ganglia and fear response, called vahar\'ai.'}
+      }},
+      {id:'mod5',title:'Star Trek: Picard',questions:{
+        cadet:{q:'What series follows an aged Jean-Luc Picard years after Nemesis?',a:'Star Trek: Picard.'},
+        ensign:{q:'What vineyard does Picard retire to at the start of the series?',a:'Chateau Picard.'},
+        commander:{q:'Whose death motivates Picard\'s journey in season one?',a:'A synthetic named Dahj (and her sister Soji).'},
+        admiral:{q:'What health condition is revealed about Picard across the series?',a:'A degenerative brain disease.'}
+      }},
+      {id:'mod6',title:'Seven of Nine, Picard Series',questions:{
+        cadet:{q:'What former Voyager character becomes a Fenris Ranger in Picard?',a:'Seven of Nine.'},
+        ensign:{q:'What organization does Seven work for prior to rejoining Starfleet fully?',a:'The Fenris Rangers.'},
+        commander:{q:'What eventual rank does Seven achieve at Starfleet?',a:'Captain.'},
+        admiral:{q:'What romantic relationship does Seven develop during the series?',a:'A relationship with Raffi Musiker.'}
+      }},
+      {id:'mod7',title:'Strange New Worlds: Pike',questions:{
+        cadet:{q:'What series centers on Captain Pike and the Enterprise before Kirk\'s era?',a:'Star Trek: Strange New Worlds.'},
+        ensign:{q:'What foreknowledge troubles Pike throughout the series?',a:'A vision of a future crippling injury.'},
+        commander:{q:'What first officer serves under Pike in this series?',a:'Una Chin-Riley, "Number One."'},
+        admiral:{q:'What genetic secret about Una is revealed during the series?',a:'She is a genetically augmented Illyrian.'}
+      }},
+      {id:'mod8',title:'Strange New Worlds: Spock & Uhura',questions:{
+        cadet:{q:'What younger version of a classic character serves as science officer in this series?',a:'Spock.'},
+        ensign:{q:'What new communications trainee joins the Enterprise in this series?',a:'Nyota Uhura.'},
+        commander:{q:'What relationship does Spock have during this series that deepens his backstory?',a:'An engagement to T\'Pring.'},
+        admiral:{q:'What crossover musical episode features the crew breaking into song?',a:'"Subspace Rhapsody."'}
+      }},
+      {id:'mod9',title:'Star Trek: Lower Decks',questions:{
+        cadet:{q:'What animated series follows lower-ranking support crew aboard a starship?',a:'Star Trek: Lower Decks.'},
+        ensign:{q:'What ship do the main characters serve aboard?',a:'The USS Cerritos.'},
+        commander:{q:'What is the rowdy, rule-breaking ensign protagonist\'s name?',a:'Beckett Mariner.'},
+        admiral:{q:'What twist reveals Mariner\'s relationship with the ship\'s captain?',a:'Captain Freeman is her mother.'}
+      }},
+      {id:'mod10',title:'Star Trek: Prodigy',questions:{
+        cadet:{q:'What animated series follows young aliens who discover an abandoned Starfleet ship?',a:'Star Trek: Prodigy.'},
+        ensign:{q:'What is the name of the ship the young protagonists commandeer?',a:'The USS Protostar.'},
+        commander:{q:'What holographic mentor guides the young crew?',a:'A hologram of Captain Kathryn Janeway.'},
+        admiral:{q:'What former antagonist becomes a central character seeking redemption?',a:'Gwyn, daughter of the Diviner.'}
+      }},
+      {id:'mod11',title:'Section 31',questions:{
+        cadet:{q:'What secretive organization operates outside normal Starfleet oversight?',a:'Section 31.'},
+        ensign:{q:'What former Mirror Universe character becomes associated with Section 31?',a:'Emperor Georgiou.'},
+        commander:{q:'What is Section 31\'s general operating philosophy?',a:'Protecting the Federation by any means necessary, often covertly.'},
+        admiral:{q:'What standalone project further explores Section 31 with Michelle Yeoh\'s character?',a:'The Section 31 film.'}
+      }},
+      {id:'mod12',title:'Short Treks & Very Short Treks',questions:{
+        cadet:{q:'What format of short-form Trek stories bridges gaps between Discovery seasons?',a:'Short Treks.'},
+        ensign:{q:'What animated, comedic companion shorts parody the franchise in brief bursts?',a:'Very Short Treks.'},
+        commander:{q:'What is a general purpose of these short-form stories?',a:'Expanding character backstories between series or seasons.'},
+        admiral:{q:'Which two young characters get a notable Short Treks episode exploring their shared past?',a:'Michael Burnham and Spock.'}
+      }},
+      {id:'mod13',title:'Synthetic Life in the Modern Era',questions:{
+        cadet:{q:'Which android\'s consciousness is preserved and later restored in a new body during Picard?',a:'Data.'},
+        ensign:{q:'What Federation-wide policy is central to Picard\'s first season plot?',a:'A ban on synthetic lifeforms.'},
+        commander:{q:'What attack triggers this ban on synthetics?',a:'Rogue synthetics attacking Mars.'},
+        admiral:{q:'Whose research is central to creating the synthetic "daughters" in Picard\'s first season?',a:'Bruce Maddox, building on Data\'s work.'}
+      }},
+      {id:'mod14',title:'The Federation\'s Modern Challenges',questions:{
+        cadet:{q:'What catastrophic stellar event threatens the Romulans in this era\'s timeline?',a:'The Romulan supernova.'},
+        ensign:{q:'What mysterious galaxy-wide event destabilizes warp travel in Discovery\'s far-future seasons?',a:'"The Burn."'},
+        commander:{q:'What faction opposes Federation ideals in Discovery\'s future-set seasons?',a:'The Emerald Chain.'},
+        admiral:{q:'What broad theme connects many modern-era Trek series regarding the Federation?',a:'Testing whether Federation ideals hold up under crisis and division.'}
+      }},
+      {id:'mod15',title:'Klingons, Redesigned',questions:{
+        cadet:{q:'What visual change did Klingons receive in early Discovery seasons?',a:'A more radically alien redesign.'},
+        ensign:{q:'What Klingon leader unites rival houses against the Federation in season one?',a:'T\'Kuvma.'},
+        commander:{q:'What named battle kicks off the Federation-Klingon war in Discovery?',a:'The Battle of the Binary Stars.'},
+        admiral:{q:'Who eventually becomes Chancellor of the Klingon Empire in Discovery?',a:'L\'Rell.'}
+      }},
+      {id:'mod16',title:'La\'an Noonien-Singh',questions:{
+        cadet:{q:'What security chief aboard the Enterprise in Strange New Worlds carries a notorious surname?',a:'La\'an Noonien-Singh.'},
+        ensign:{q:'What historical figure does her surname connect her to?',a:'Khan Noonien Singh.'},
+        commander:{q:'What traumatic childhood event shapes La\'an\'s backstory?',a:'Surviving a Gorn attack as a child.'},
+        admiral:{q:'What time-travel episode significantly develops her character?',a:'"Tomorrow and Tomorrow and Tomorrow."'}
+      }},
+      {id:'mod17',title:'Starfleet Academy, the New Series',questions:{
+        cadet:{q:'What upcoming modern-era series focuses on a new generation of Starfleet cadets?',a:'Star Trek: Starfleet Academy.'},
+        ensign:{q:'What thematic focus typically defines "Academy"-style Trek stories?',a:'The training and growth of young Starfleet cadets.'},
+        commander:{q:'What broader era of the timeline does this series connect to?',a:'The far-future, post-Discovery era of the franchise.'},
+        admiral:{q:'How does introducing a cadet-focused series reflect trends in the modern era?',a:'It broadens the franchise\'s tone to reach new and younger audiences.'}
+      }},
+      {id:'mod18',title:'Discovery\'s Leap to the Future',questions:{
+        cadet:{q:'How far into the future does the USS Discovery travel by the end of season two?',a:'To the 32nd century.'},
+        ensign:{q:'What dangerous AI threat drives Discovery\'s crew to make this leap?',a:'Control.'},
+        commander:{q:'What state is the Federation in when Discovery arrives in this future?',a:'Fractured and diminished after "the Burn."'},
+        admiral:{q:'What role does Burnham eventually take in this future era?',a:'A key figure helping rebuild the Federation.'}
+      }},
+      {id:'mod19',title:'Raffi Musiker',questions:{
+        cadet:{q:'What former Starfleet officer and close friend of Picard struggles with addiction in the Picard series?',a:'Raffi Musiker.'},
+        ensign:{q:'What personal loss strains Raffi\'s relationship with her family?',a:'Estrangement from her son.'},
+        commander:{q:'What organization does Raffi work with prior to rejoining Starfleet?',a:'The Fenris Rangers.'},
+        admiral:{q:'What role does Raffi ultimately serve by the series\' conclusion?',a:'A Starfleet officer serving aboard a new Enterprise.'}
+      }},
+      {id:'mod20',title:'Modern Era Storytelling',questions:{
+        cadet:{q:'What overall visual style distinguishes modern-era Trek shows from earlier series?',a:'More cinematic, serialized production values.'},
+        ensign:{q:'What streaming-era shift affected how modern Trek stories are told?',a:'Season-long serialized arcs rather than mostly standalone episodes.'},
+        commander:{q:'Name two very different tones modern Trek series span, from comedy to drama.',a:'Animated comedy (Lower Decks) and prestige drama (Picard/Discovery).'},
+        admiral:{q:'What franchise-wide trend does this tonal diversity reflect?',a:'An effort to broaden storytelling formats and reach varied audiences.'}
+      }}
+      // ---- ADD MORE MODERN-ERA CARDS HERE ----
+    ]
+  }
+};
+
+const ERA_ORDER = ['tos','tng','ent','kelvin','modern'];
+
+/* ----------------------------------------------------------------------
+   3. GAME STATE HELPERS
+   ---------------------------------------------------------------------- */
+let ROOM_CODE = null;
+let IS_HOST = false;
+let MY_PLAYER_ID = null;
+let ROOM_STATE = null;
+let unsubscribe = null;
+
+function genRoomCode(){
+  const letters = 'ACDEFGHJKLMNPQRSTUVWXYZ'; // no B/I/O to avoid confusion
+  let code = '';
+  for (let i=0;i<4;i++) code += letters[Math.floor(Math.random()*letters.length)];
+  return code;
+}
+function genId(prefix){ return prefix + '_' + Math.random().toString(36).slice(2,9); }
+
+function defaultRoomState(mode){
+  return {
+    code: ROOM_CODE,
+    mode: mode,              // 'individual' | 'team'
+    status: 'lobby',         // 'lobby' | 'playing' | 'ended'
+    players: {},             // id -> {id,name,score}
+    turnOrder: [],
+    turnIndex: 0,
+    dice: { rolling:false, result:null },
+    activeEra: null,
+    activeCard: null,        // {eraId, cardId}
+    activeQuestion: null,    // {difficulty, revealed:false, answered:false, points}
+    usedCards: {},           // eraId -> [cardId,...]
+    usedDifficulties: {},    // cardId -> [difficulty,...]
+    updatedAt: Date.now()
+  };
+}
+
+function pushUpdate(partial){
+  partial.updatedAt = Date.now();
+  Sync.update(ROOM_CODE, partial);
+}
+
+function showToast(msg, ms){
+  const host = document.getElementById('toastHost');
+  const el = document.createElement('div');
+  el.className = 'toast';
+  el.textContent = msg;
+  host.appendChild(el);
+  setTimeout(()=> el.remove(), ms || 2600);
+}
+
+/* ----------------------------------------------------------------------
+   4 & 5. RENDERING + EVENT HANDLERS
+   ---------------------------------------------------------------------- */
+const mainEl = document.getElementById('main');
+const topbarRight = document.getElementById('topbarRight');
+
+function renderTopbar(){
+  if (!ROOM_CODE){ topbarRight.innerHTML=''; return; }
+  const syncMode = Sync.mode();
+  topbarRight.innerHTML = `
+    <span class="roomcode-pill">ROOM ${ROOM_CODE}</span>
+    <span class="pill">${IS_HOST ? 'Host View' : 'Player View'}</span>
+    <span class="sync-status"><span class="sync-dot ${syncMode==='local'?'local':''}"></span>${syncMode==='firebase' ? 'Live sync (Firebase)' : 'Local sync (same device)'}</span>
+    <button class="btn btn-ghost btn-sm" id="leaveBtn">Leave</button>
+  `;
+  document.getElementById('leaveBtn').onclick = leaveRoom;
+}
+
+function leaveRoom(){
+  if (unsubscribe) unsubscribe();
+  ROOM_CODE=null; IS_HOST=false; MY_PLAYER_ID=null; ROOM_STATE=null;
+  renderTopbar();
+  renderLanding();
+}
+
+/* ---------- LANDING SCREEN ---------- */
+function renderLanding(){
+  mainEl.innerHTML = `
+    <div class="hero">
+      <h1>Bridge Trivia</h1>
+      <p>A five-era Star Trek trivia game for crews and captains everywhere. Roll the dice, pick your deck, and defend your score on the bridge.</p>
+      <div class="landing-actions">
+        <button class="btn btn-primary" id="hostBtn">🖖 Host a New Game</button>
+        <button class="btn" id="joinBtn">📡 Join a Game</button>
+      </div>
+      <div class="era-strip">
+        ${ERA_ORDER.map(id=>`<span class="era-chip" data-era="${id}" style="background:var(--bg-panel-2);border-color:var(--line);">${ERAS[id].icon}</span>`).join('')}
+        <span class="era-chip" data-era="wildcard">WILD</span>
+      </div>
+    </div>
+    <div class="wrap" style="max-width:760px;">
+      <details class="info" open>
+        <summary>📖 How to Play</summary>
+        <div class="body">
+          <ol>
+            <li>The <strong>host</strong> creates a room and gets a 4-letter room code.</li>
+            <li>The host picks <strong>Individual</strong> or <strong>Team</strong> mode, then players join remotely using the code.</li>
+            <li>The host starts the game. On each turn, the active player/team <strong>rolls the die</strong>.</li>
+            <li>Five sides match the five Star Trek eras; the sixth is a <strong>Wildcard</strong> letting the roller pick any era.</li>
+            <li>The active player/team picks an unused card, then a difficulty: Cadet (10), Ensign (20), Commander (30), Admiral (40).</li>
+            <li>Everyone sees the question. The host reveals the answer, then marks it Correct or Incorrect — scores update instantly.</li>
+            <li>Play passes to the next player/team until the host ends the game.</li>
+          </ol>
+        </div>
+      </details>
+      <details class="info">
+        <summary>🌐 Remote Play Setup</summary>
+        <div class="body">
+          <p><strong>Best option — true cross-device play:</strong> open this file's source and fill in the <code>FIREBASE_CONFIG</code> object near the top of the script with your free Firebase Realtime Database credentials (takes ~5 minutes — instructions are in the code comments directly above it). Once configured, the host and every player can be on totally different devices anywhere with internet.</p>
+          <p><strong>No setup needed — same-device fallback:</strong> if you skip Firebase, the game automatically uses your browser's local storage to sync between tabs/windows <em>on the same device</em>. This is perfect for pass-and-play: open one tab as Host and one tab per player/team on the same computer or tablet, or simply pass one device around.</p>
+        </div>
+      </details>
+      <details class="info">
+        <summary>🚀 Hosting This File Online</summary>
+        <div class="body">
+          <p>This is a single, self-contained <code>index.html</code> file. To host it: upload it to any static host — GitHub Pages, Netlify, Vercel, or even a personal web server — and share the resulting URL. No build step or server-side code is required.</p>
+        </div>
+      </details>
+    </div>
+  `;
+  document.getElementById('hostBtn').onclick = renderHostSetup;
+  document.getElementById('joinBtn').onclick = renderJoinScreen;
+}
+
+/* ---------- HOST SETUP (choose mode, create room) ---------- */
+function renderHostSetup(){
+  mainEl.innerHTML = `
+    <div class="wrap" style="max-width:560px;">
+      <div class="panel">
+        <h2>Create a New Game Room</h2>
+        <div class="field">
+          <label>Game Mode</label>
+          <div class="pill-row">
+            <button class="btn btn-primary" id="modeIndividual" style="flex:1;">Individual Players</button>
+            <button class="btn" id="modeTeam" style="flex:1;">Teams</button>
+          </div>
+        </div>
+        <p class="hint">You can add players/teams once the room is created. You'll get a room code to share.</p>
+        <button class="btn btn-ghost" id="backBtn">← Back</button>
+      </div>
+    </div>
+  `;
+  let chosenMode = 'individual';
+  const indiBtn = document.getElementById('modeIndividual');
+  const teamBtn = document.getElementById('modeTeam');
+  function setMode(m){
+    chosenMode = m;
+    indiBtn.className = 'btn ' + (m==='individual' ? 'btn-primary' : '');
+    teamBtn.className = 'btn ' + (m==='team' ? 'btn-primary' : '');
+  }
+  indiBtn.onclick = ()=>{ setMode('individual'); createRoomAndEnter(chosenMode); };
+  teamBtn.onclick = ()=>{ setMode('team'); createRoomAndEnter(chosenMode); };
+  document.getElementById('backBtn').onclick = renderLanding;
+}
+
+function createRoomAndEnter(mode){
+  ROOM_CODE = genRoomCode();
+  IS_HOST = true;
+  const state = defaultRoomState(mode);
+  Sync.createRoom(ROOM_CODE, state, (ok)=>{
+    if (!ok){ showToast('Could not create room. Check your connection or Firebase config.'); return; }
+    subscribeToRoom();
+    renderTopbar();
+    showToast('Room ' + ROOM_CODE + ' created!');
+  });
+}
+
+/* ---------- JOIN SCREEN ---------- */
+function renderJoinScreen(){
+  mainEl.innerHTML = `
+    <div class="wrap" style="max-width:480px;">
+      <div class="panel">
+        <h2>Join a Game</h2>
+        <div class="field">
+          <label>Room Code</label>
+          <input type="text" id="joinCode" maxlength="4" placeholder="e.g. FLTX" style="text-transform:uppercase;">
+        </div>
+        <div class="field">
+          <label>Your Player or Team Name</label>
+          <input type="text" id="joinName" maxlength="24" placeholder="e.g. Team Enterprise">
+        </div>
+        <div class="error-msg" id="joinErr"></div>
+        <button class="btn btn-primary btn-block" id="joinSubmit">Join Room</button>
+        <div style="height:10px;"></div>
+        <button class="btn btn-ghost btn-block" id="backBtn">← Back</button>
+      </div>
+    </div>
+  `;
+  document.getElementById('backBtn').onclick = renderLanding;
+  document.getElementById('joinSubmit').onclick = attemptJoin;
+  document.getElementById('joinName').addEventListener('keydown', e=>{ if (e.key==='Enter') attemptJoin(); });
+}
+
+function attemptJoin(){
+  const codeInput = document.getElementById('joinCode');
+  const nameInput = document.getElementById('joinName');
+  const errEl = document.getElementById('joinErr');
+  const code = codeInput.value.trim().toUpperCase();
+  const name = nameInput.value.trim();
+  errEl.textContent = '';
+
+  if (code.length !== 4){ errEl.textContent = 'Room codes are 4 letters long.'; return; }
+  if (!name){ errEl.textContent = 'Please enter a name.'; return; }
+
+  Sync.roomExists(code, (exists)=>{
+    if (!exists){ errEl.textContent = 'No room found with that code. Double-check it with your host.'; return; }
+    // Fetch current state once to validate duplicate names & get status
+    Sync.subscribe(code, function onceCb(state){
+      if (!state) return;
+      const dupe = Object.values(state.players || {}).some(p => p.name.toLowerCase() === name.toLowerCase());
+      if (dupe){ errEl.textContent = 'That name is already taken in this room — try another.'; return; }
+      const id = genId('p');
+      MY_PLAYER_ID = id;
+      ROOM_CODE = code;
+      IS_HOST = false;
+      const playersUpdate = {}; playersUpdate[id] = { id, name, score:0 };
+      Sync.updatePath(code, 'players/' + id, { id, name, score:0 });
+      // switch to real ongoing subscription
+      subscribeToRoom();
+      renderTopbar();
+      showToast('Joined room ' + code + '!');
+    })();
+  });
+}
+
+/* ---------- SUBSCRIBE & MAIN RENDER DISPATCH ---------- */
+function subscribeToRoom(){
+  if (unsubscribe) unsubscribe();
+  unsubscribe = Sync.subscribe(ROOM_CODE, (state)=>{
+    if (!state){ return; }
+    ROOM_STATE = state;
+    renderTopbar();
+    if (IS_HOST) renderHostDashboard();
+    else renderPlayerScreen();
+  });
+}
+
+/* ---------- HOST DASHBOARD ---------- */
+function renderHostDashboard(){
+  const s = ROOM_STATE;
+  if (!s){ mainEl.innerHTML = '<div class="wrap">Loading room…</div>'; return; }
+
+  if (s.status === 'lobby'){ renderHostLobby(s); return; }
+  if (s.status === 'ended'){ renderGameEnded(s); return; }
+  renderHostPlaying(s);
+}
+
+function renderHostLobby(s){
+  const players = Object.values(s.players || {});
+  mainEl.innerHTML = `
+    <div class="wrap">
+      <div class="panel">
+        <div class="flex-between">
+          <h2>Lobby — Room ${s.code} <span class="tag-mode">${s.mode}</span></h2>
+          <button class="btn btn-primary" id="startGameBtn" ${players.length<1?'disabled':''}>Start Game ▶</button>
+        </div>
+        <p class="hint">Share the room code <strong>${s.code}</strong> with your ${s.mode==='team'?'teams':'players'}. They can join from the landing screen on any device (or another tab, if using local sync).</p>
+        <div id="playerList"></div>
+        <div class="field" style="margin-top:16px;">
+          <label>Add ${s.mode==='team'?'Team':'Player'} Manually (optional — useful if they can't join themselves)</label>
+          <div class="pill-row">
+            <input type="text" id="manualName" placeholder="${s.mode==='team'?'Team name':'Player name'}" style="flex:1;">
+            <button class="btn" id="manualAddBtn">Add</button>
+          </div>
+        </div>
+      </div>
+    </div>
+  `;
+  const listEl = document.getElementById('playerList');
+  if (players.length===0){
+    listEl.innerHTML = `<p class="hint">No ${s.mode==='team'?'teams':'players'} yet — waiting for them to join with the room code…</p>`;
+  } else {
+    listEl.innerHTML = players.map(p => `
+      <div class="list-row">
+        <input type="text" value="${escapeHtml(p.name)}" data-id="${p.id}" class="renameInput">
+        <button class="btn btn-sm btn-bad removePlayerBtn" data-id="${p.id}">Remove</button>
+      </div>
+    `).join('');
+    listEl.querySelectorAll('.renameInput').forEach(inp=>{
+      inp.addEventListener('change', ()=>{
+        const id = inp.dataset.id;
+        const trimmed = inp.value.trim();
+        if (!trimmed) { inp.value = s.players[id].name; return; }
+        Sync.updatePath(ROOM_CODE, 'players/'+id+'/name', trimmed);
+      });
+    });
+    listEl.querySelectorAll('.removePlayerBtn').forEach(btn=>{
+      btn.onclick = ()=>{
+        const id = btn.dataset.id;
+        const updated = Object.assign({}, s.players);
+        delete updated[id];
+        pushUpdate({ players: updated });
+      };
+    });
+  }
+  document.getElementById('manualAddBtn').onclick = ()=>{
+    const input = document.getElementById('manualName');
+    const name = input.value.trim();
+    if (!name) return;
+    const dupe = Object.values(s.players||{}).some(p=>p.name.toLowerCase()===name.toLowerCase());
+    if (dupe){ showToast('That name is already in use.'); return; }
+    const id = genId('p');
+    Sync.updatePath(ROOM_CODE, 'players/'+id, { id, name, score:0 });
+    input.value='';
+  };
+  document.getElementById('startGameBtn').onclick = ()=>{
+    const ids = Object.keys(s.players || {});
+    if (ids.length < 1) return;
+    // Shuffle turn order for fairness
+    for (let i=ids.length-1;i>0;i--){ const j = Math.floor(Math.random()*(i+1)); [ids[i],ids[j]]=[ids[j],ids[i]]; }
+    pushUpdate({ status:'playing', turnOrder: ids, turnIndex: 0 });
+  };
+}
+
+function escapeHtml(str){
+  const d = document.createElement('div'); d.textContent = str; return d.innerHTML;
+}
+
+function currentPlayer(s){
+  if (!s.turnOrder || s.turnOrder.length===0) return null;
+  const id = s.turnOrder[s.turnIndex % s.turnOrder.length];
+  return s.players ? s.players[id] : null;
+}
+
+function renderScoreboard(s, opts){
+  opts = opts || {};
+  const players = (s.turnOrder && s.turnOrder.length ? s.turnOrder : Object.keys(s.players||{})).map(id=>s.players[id]).filter(Boolean);
+  const activeId = s.turnOrder && s.turnOrder.length ? s.turnOrder[s.turnIndex % s.turnOrder.length] : null;
+  return `<div class="scoreboard">${players.map(p=>`
+    <div class="score-card ${p.id===activeId?'active':''}">
+      ${p.id===activeId?'<span class="turn-tag">On the bridge</span>':''}
+      ${opts.allowRemove?`<button class="remove removeScoreBtn" data-id="${p.id}" title="Remove">✕</button>`:''}
+      <div class="name">${escapeHtml(p.name)}</div>
+      <div class="pts">${p.score||0}</div>
+      ${opts.editable?`
+        <div class="adjust">
+          <button class="btn btn-sm adjBtn" data-id="${p.id}" data-delta="-10">−10</button>
+          <button class="btn btn-sm adjBtn" data-id="${p.id}" data-delta="10">+10</button>
+        </div>`:''}
+    </div>
+  `).join('')}</div>`;
+}
+
+function wireScoreboardEvents(s){
+  mainEl.querySelectorAll('.adjBtn').forEach(btn=>{
+    btn.onclick = ()=>{
+      const id = btn.dataset.id;
+      const delta = parseInt(btn.dataset.delta,10);
+      const newScore = (s.players[id].score||0) + delta;
+      Sync.updatePath(ROOM_CODE, 'players/'+id+'/score', newScore);
+    };
+  });
+  mainEl.querySelectorAll('.removeScoreBtn').forEach(btn=>{
+    btn.onclick = ()=>{
+      const id = btn.dataset.id;
+      const updated = Object.assign({}, s.players); delete updated[id];
+      const newOrder = (s.turnOrder||[]).filter(x=>x!==id);
+      pushUpdate({ players: updated, turnOrder: newOrder, turnIndex: Math.min(s.turnIndex, Math.max(newOrder.length-1,0)) });
+    };
+  });
+}
+
+function eraProgressText(eraId, s){
+  const total = ERAS[eraId].cards.length;
+  const used = (s.usedCards && s.usedCards[eraId]) ? s.usedCards[eraId].length : 0;
+  return `${total-used}/${total} left`;
+}
+
+function renderEraGrid(s, opts){
+  opts = opts || {};
+  const tiles = ERA_ORDER.map(eraId=>{
+    const era = ERAS[eraId];
+    const total = era.cards.length;
+    const used = (s.usedCards && s.usedCards[eraId]) ? s.usedCards[eraId].length : 0;
+    const exhausted = used >= total;
+    const isSelectable = opts.selectable && !exhausted && (opts.forcedEra ? opts.forcedEra===eraId : true);
+    const isHighlighted = s.dice && s.dice.result === eraId;
+    return `<div class="era-tile ${exhausted?'disabled':''} ${isHighlighted?'highlight':''} ${(opts.selectedEra===eraId)?'selected':''}"
+                 data-era="${eraId}" data-era-select="${eraId}" ${isSelectable?'':'aria-disabled="true"'}>
+      <div class="era-icon">${era.icon}</div>
+      <div>
+        <div class="era-name">${era.name}</div>
+        <div class="era-tagline">${era.tagline}</div>
+      </div>
+      <div class="era-progress">${eraProgressText(eraId,s)}</div>
+    </div>`;
+  }).join('');
+  const wildHighlighted = s.dice && s.dice.result === 'wildcard';
+  const wildTile = `<div class="era-tile ${wildHighlighted?'highlight':''}" data-era="wildcard">
+      <div class="era-icon">★</div>
+      <div>
+        <div class="era-name">Wildcard</div>
+        <div class="era-tagline">Choose any era</div>
+      </div>
+      <div class="era-progress">&nbsp;</div>
+    </div>`;
+  return `<div class="era-grid">${tiles}${wildTile}</div>`;
+}
+
+function renderCardGrid(eraId, s){
+  const era = ERAS[eraId];
+  const used = (s.usedCards && s.usedCards[eraId]) ? s.usedCards[eraId] : [];
+  return `<div class="card-grid" data-era-cards="${eraId}">
+    ${era.cards.map((c,idx)=>{
+      const isUsed = used.includes(c.id);
+      return `<div class="mini-card ${isUsed?'used':''}" data-era="${eraId}" data-card-select="${c.id}" title="${escapeHtml(c.title)}">
+        <span class="num">${idx+1}</span>
+      </div>`;
+    }).join('')}
+  </div>`;
+}
+
+function renderHostPlaying(s){
+  const active = currentPlayer(s);
+  const activeEraForCards = s.activeEra;
+  mainEl.innerHTML = `
+    <div class="wrap">
+      <div class="grid grid-3">
+        <div class="panel" style="grid-column:1 / -1;">
+          <div class="flex-between">
+            <h2>Scoreboard</h2>
+            <div class="pill-row">
+              <button class="btn btn-sm" id="nextTurnBtn">Next Turn ⏭</button>
+              <button class="btn btn-sm btn-ghost" id="resetUsedBtn">Reset Used Cards</button>
+              <button class="btn btn-sm btn-bad" id="endGameBtn">End Game</button>
+            </div>
+          </div>
+          ${renderScoreboard(s, {editable:true, allowRemove:true})}
+        </div>
+
+        <div class="panel">
+          <h2>Dice</h2>
+          <div class="dice-zone">
+            <div class="die ${s.dice && s.dice.rolling ? 'rolling':''} ${s.dice && s.dice.result==='wildcard'?'result-wildcard':''}" id="dieFace">
+              <div class="die-face">${diceFaceLabel(s.dice)}</div>
+              <div class="die-label">${active ? escapeHtml(active.name)+'\'s roll' : 'Waiting…'}</div>
+            </div>
+            <button class="btn btn-primary btn-block" id="rollDiceBtn" ${!active || (s.dice&&s.dice.rolling) ? 'disabled':''}>🎲 Roll for ${active?escapeHtml(active.name):'—'}</button>
+          </div>
+        </div>
+
+        <div class="panel" style="grid-column:span 2;">
+          <h2>Era Decks</h2>
+          ${renderEraGrid(s, { selectedEra: activeEraForCards })}
+          <div id="cardArea" style="margin-top:14px;"></div>
+        </div>
+      </div>
+    </div>
+  `;
+  wireScoreboardEvents(s);
+  document.getElementById('nextTurnBtn').onclick = advanceTurn;
+  document.getElementById('resetUsedBtn').onclick = ()=>{
+    if (confirm('Reset all used cards & difficulties? Scores are kept.')) pushUpdate({ usedCards:{}, usedDifficulties:{} });
+  };
+  document.getElementById('endGameBtn').onclick = ()=>{
+    if (confirm('End the game for everyone?')) pushUpdate({ status:'ended' });
+  };
+  document.getElementById('rollDiceBtn').onclick = hostRollDice;
+
+  // Wire era tile clicks (host may also pick era manually, e.g. to correct a call)
+  mainEl.querySelectorAll('[data-era-select]').forEach(tile=>{
+    tile.onclick = ()=>{
+      const eraId = tile.dataset.eraSelect;
+      if (tile.classList.contains('disabled')) return;
+      pushUpdate({ activeEra: eraId, activeCard:null, activeQuestion:null });
+    };
+  });
+  const wildTile = mainEl.querySelector('.era-tile[data-era="wildcard"]');
+  if (wildTile) wildTile.onclick = null; // wildcard tile itself isn't a deck; ignore direct click here
+
+  renderCardArea(s);
+}
+
+function diceFaceLabel(dice){
+  if (!dice || !dice.result) return '?';
+  if (dice.result === 'wildcard') return '★';
+  return ERAS[dice.result].icon;
+}
+
+function hostRollDice(){
+  pushUpdate({ dice: { rolling:true, result:null } });
+  setTimeout(()=>{
+    const options = ERA_ORDER.concat(['wildcard']);
+    const result = options[Math.floor(Math.random()*options.length)];
+    const patch = { dice: { rolling:false, result } };
+    if (result !== 'wildcard') patch.activeEra = result;
+    else patch.activeEra = null;
+    patch.activeCard = null;
+    patch.activeQuestion = null;
+    pushUpdate(patch);
+  }, 900);
+}
+
+function renderCardArea(s){
+  const area = document.getElementById('cardArea');
+  if (!area) return;
+
+  if (s.activeQuestion){
+    area.innerHTML = renderQuestionPanel(s, true);
+    wireQuestionPanel(s, true);
+    return;
+  }
+  if (s.activeCard){
+    const era = ERAS[s.activeCard.eraId];
+    const card = era.cards.find(c=>c.id===s.activeCard.cardId);
+    const usedDiffs = (s.usedDifficulties && s.usedDifficulties[card.id]) || [];
+    area.innerHTML = `
+      <div class="panel" data-era="${era.id}">
+        <h2 style="color:#fff;">${escapeHtml(card.title)}</h2>
+        <p class="hint" style="color:rgba(255,255,255,.75);">Choose a difficulty to reveal that question to everyone.</p>
+        <div class="diff-select">
+          ${DIFFICULTIES.map(d=>`
+            <div class="diff-btn ${usedDiffs.includes(d.key)?'used':''}" data-diff="${d.key}">
+              <div class="lvl">${d.label}</div>
+              <div class="pts">${d.points} pts</div>
+            </div>
+          `).join('')}
+        </div>
+      </div>
+    `;
+    area.querySelectorAll('.diff-btn').forEach(btn=>{
+      if (btn.classList.contains('used')) return;
+      btn.onclick = ()=>{
+        const diff = btn.dataset.diff;
+        const points = DIFFICULTIES.find(d=>d.key===diff).points;
+        pushUpdate({ activeQuestion: { difficulty:diff, revealed:false, answered:false, points } });
+      };
+    });
+    return;
+  }
+  if (s.activeEra){
+    area.innerHTML = `<div class="panel"><h2>${ERAS[s.activeEra].name} — Choose a Card</h2>${renderCardGrid(s.activeEra, s)}</div>`;
+    area.querySelectorAll('[data-card-select]').forEach(tile=>{
+      if (tile.classList.contains('used')) return;
+      tile.onclick = ()=>{
+        pushUpdate({ activeCard: { eraId: tile.dataset.era, cardId: tile.dataset.cardSelect } });
+      };
+    });
+    return;
+  }
+  area.innerHTML = `<p class="hint">Roll the dice to reveal an era deck, then choose a card.</p>`;
+}
+
+function renderQuestionPanel(s, isHost){
+  const era = ERAS[s.activeCard.eraId];
+  const card = era.cards.find(c=>c.id===s.activeCard.cardId);
+  const q = card.questions[s.activeQuestion.difficulty];
+  const diffMeta = DIFFICULTIES.find(d=>d.key===s.activeQuestion.difficulty);
+  return `
+    <div class="card-face" data-era="${era.id}">
+      <span class="era-tag">${era.name}</span>
+      <span class="diff-tag">${diffMeta.label} · ${diffMeta.points} pts</span>
+      <div class="q-text">${escapeHtml(q.q)}</div>
+      ${ (isHost || s.activeQuestion.revealed) ? `<div class="a-text"><strong>Answer:</strong> ${escapeHtml(q.a)}</div>` : '' }
+      ${ isHost ? `
+        <div class="pill-row" style="margin-top:6px;">
+          ${!s.activeQuestion.revealed ? `<button class="btn btn-primary" id="revealBtn">Reveal Answer</button>` : ''}
+          <button class="btn btn-good" id="correctBtn" ${s.activeQuestion.answered?'disabled':''}>✔ Correct</button>
+          <button class="btn btn-bad" id="incorrectBtn" ${s.activeQuestion.answered?'disabled':''}>✘ Incorrect</button>
+          <button class="btn btn-ghost" id="cancelQBtn">Cancel / Choose Different Card</button>
+        </div>
+      ` : '' }
+    </div>
+  `;
+}
+
+function wireQuestionPanel(s){
+  const revealBtn = document.getElementById('revealBtn');
+  if (revealBtn) revealBtn.onclick = ()=>{
+    pushUpdate({ activeQuestion: Object.assign({}, s.activeQuestion, { revealed:true }) });
+  };
+  const correctBtn = document.getElementById('correctBtn');
+  if (correctBtn) correctBtn.onclick = ()=> resolveAnswer(s, true);
+  const incorrectBtn = document.getElementById('incorrectBtn');
+  if (incorrectBtn) incorrectBtn.onclick = ()=> resolveAnswer(s, false);
+  const cancelBtn = document.getElementById('cancelQBtn');
+  if (cancelBtn) cancelBtn.onclick = ()=>{
+    pushUpdate({ activeCard:null, activeQuestion:null });
+  };
+}
+
+function resolveAnswer(s, correct){
+  const active = currentPlayer(s);
+  const card = s.activeCard;
+  const q = s.activeQuestion;
+  // Mark card+difficulty used
+  const usedCards = Object.assign({}, s.usedCards);
+  const usedDifficulties = Object.assign({}, s.usedDifficulties);
+  const eraUsed = (usedCards[card.eraId] || []).slice();
+  const cardDiffs = (usedDifficulties[card.cardId] || []).slice();
+  if (!cardDiffs.includes(q.difficulty)) cardDiffs.push(q.difficulty);
+  usedDifficulties[card.cardId] = cardDiffs;
+  // A card is "fully used" (grey out) once all 4 difficulties are answered
+  const allDiffsUsed = DIFFICULTIES.every(d=>cardDiffs.includes(d.key));
+  if (allDiffsUsed && !eraUsed.includes(card.cardId)) eraUsed.push(card.cardId);
+  usedCards[card.eraId] = eraUsed;
+
+  const patch = {
+    activeQuestion: Object.assign({}, q, { answered:true, revealed:true }),
+    usedCards, usedDifficulties
+  };
+  if (correct && active){
+    Sync.updatePath(ROOM_CODE, 'players/'+active.id+'/score', (active.score||0) + q.points);
+  }
+  pushUpdate(patch);
+  showToast(correct ? `+${q.points} pts to ${active?active.name:'—'}!` : 'Marked incorrect — no points awarded.');
+}
+
+function advanceTurn(){
+  const s = ROOM_STATE;
+  if (!s.turnOrder || s.turnOrder.length===0) return;
+  const nextIndex = (s.turnIndex + 1) % s.turnOrder.length;
+  pushUpdate({
+    turnIndex: nextIndex,
+    dice: { rolling:false, result:null },
+    activeEra:null, activeCard:null, activeQuestion:null
+  });
+}
+
+function renderGameEnded(s){
+  const players = Object.values(s.players||{}).sort((a,b)=>(b.score||0)-(a.score||0));
+  mainEl.innerHTML = `
+    <div class="wrap" style="max-width:600px;">
+      <div class="panel">
+        <h2>Mission Complete 🖖</h2>
+        <p class="hint">Final standings for Room ${s.code}:</p>
+        ${players.map((p,i)=>`
+          <div class="list-row"><span>${i===0?'🏆 ':''}${escapeHtml(p.name)}</span><strong>${p.score||0} pts</strong></div>
+        `).join('')}
+        ${IS_HOST ? `<button class="btn btn-primary btn-block" id="newRoomBtn">Start a New Room</button>` : `<button class="btn btn-block" id="leaveBtn2">Leave Room</button>`}
+      </div>
+    </div>
+  `;
+  if (IS_HOST){
+    document.getElementById('newRoomBtn').onclick = ()=>{ leaveRoom(); };
+  } else {
+    document.getElementById('leaveBtn2').onclick = leaveRoom;
+  }
+}
+
+/* ---------- PLAYER SCREEN ---------- */
+function renderPlayerScreen(){
+  const s = ROOM_STATE;
+  if (!s){ mainEl.innerHTML = '<div class="wrap">Loading room…</div>'; return; }
+  if (s.status === 'ended'){ renderGameEnded(s); return; }
+  if (s.status === 'lobby'){
+    mainEl.innerHTML = `
+      <div class="wrap" style="max-width:560px;">
+        <div class="panel">
+          <h2>Waiting for the Host…</h2>
+          <p class="hint">You're in room <strong>${s.code}</strong>. Sit tight while the host adds everyone and starts the game.</p>
+          <div id="playerListReadonly"></div>
+        </div>
+      </div>
+    `;
+    const box = document.getElementById('playerListReadonly');
+    const players = Object.values(s.players||{});
+    box.innerHTML = players.length ? players.map(p=>`<div class="pill" style="margin:4px;">${escapeHtml(p.name)}</div>`).join('') : '<p class="hint">No one else has joined yet.</p>';
+    return;
+  }
+
+  const active = currentPlayer(s);
+  const isMyTurn = active && active.id === MY_PLAYER_ID;
+  let cardAreaHtml = '';
+
+  if (s.activeQuestion){
+    cardAreaHtml = renderQuestionPanel(s, false);
+  } else if (s.activeCard){
+    const era = ERAS[s.activeCard.eraId];
+    const card = era.cards.find(c=>c.id===s.activeCard.cardId);
+    const usedDiffs = (s.usedDifficulties && s.usedDifficulties[card.id]) || [];
+    cardAreaHtml = `
+      <div class="panel" data-era="${era.id}">
+        <h2 style="color:#fff;">${escapeHtml(card.title)}</h2>
+        ${isMyTurn ? `<p class="hint" style="color:rgba(255,255,255,.8);">It's your turn — choose a difficulty!</p>` : `<p class="hint" style="color:rgba(255,255,255,.8);">Waiting for ${escapeHtml(active?active.name:'the active player')} to choose a difficulty…</p>`}
+        <div class="diff-select">
+          ${DIFFICULTIES.map(d=>`
+            <div class="diff-btn ${usedDiffs.includes(d.key)?'used':''} ${isMyTurn && !usedDiffs.includes(d.key)?'':'no-select'}" data-diff="${d.key}" style="${isMyTurn && !usedDiffs.includes(d.key)?'cursor:pointer;':'cursor:default;'}">
+              <div class="lvl">${d.label}</div>
+              <div class="pts">${d.points} pts</div>
+            </div>
+          `).join('')}
+        </div>
+      </div>
+    `;
+  } else if (s.activeEra){
+    cardAreaHtml = `<div class="panel"><h2>${ERAS[s.activeEra].name} — ${isMyTurn?'Choose a Card':'Card Selection'}</h2>${renderCardGrid(s.activeEra, s)}</div>`;
+  } else {
+    cardAreaHtml = `<div class="panel"><p class="hint">${isMyTurn ? 'Roll the die to reveal your era deck!' : 'Waiting for ' + (active?escapeHtml(active.name):'the active player') + ' to roll…'}</p></div>`;
+  }
+
+  mainEl.innerHTML = `
+    <div class="wrap">
+      ${isMyTurn ? `<div class="turn-banner">🖖 It's your turn!</div><div style="height:12px;"></div>` : ''}
+      <div class="panel">
+        <h2>Scoreboard</h2>
+        ${renderScoreboard(s, {})}
+      </div>
+      <div class="panel">
+        <h2>Dice</h2>
+        <div class="dice-zone">
+          <div class="die ${s.dice && s.dice.rolling?'rolling':''} ${s.dice && s.dice.result==='wildcard'?'result-wildcard':''}">
+            <div class="die-face">${diceFaceLabel(s.dice)}</div>
+            <div class="die-label">${active?escapeHtml(active.name)+'\'s roll':'—'}</div>
+          </div>
+          ${isMyTurn && !s.activeEra && !s.dice.result ? `<button class="btn btn-primary btn-block" id="playerRollBtn">🎲 Roll the Die</button>` : ''}
+        </div>
+      </div>
+      <div class="panel">
+        <h2>Era Decks</h2>
+        ${renderEraGrid(s, {})}
+      </div>
+      <div id="cardArea">${cardAreaHtml}</div>
+    </div>
+  `;
+
+  const rollBtn = document.getElementById('playerRollBtn');
+  if (rollBtn) rollBtn.onclick = hostRollDice; // same roll logic; any client with sync write access can trigger it
+
+  if (s.activeCard && !s.activeQuestion && isMyTurn){
+    mainEl.querySelectorAll('.diff-btn').forEach(btn=>{
+      if (btn.classList.contains('used')) return;
+      btn.onclick = ()=>{
+        const diff = btn.dataset.diff;
+        const points = DIFFICULTIES.find(d=>d.key===diff).points;
+        pushUpdate({ activeQuestion: { difficulty:diff, revealed:false, answered:false, points } });
+      };
+    });
+  }
+  if (s.activeEra && !s.activeCard && isMyTurn){
+    mainEl.querySelectorAll('[data-card-select]').forEach(tile=>{
+      if (tile.classList.contains('used')) return;
+      tile.onclick = ()=>{
+        pushUpdate({ activeCard: { eraId: tile.dataset.era, cardId: tile.dataset.cardSelect } });
+      };
+    });
+  }
+  // If wildcard was rolled, let the active player pick their era from the grid
+  if (isMyTurn && s.dice && s.dice.result === 'wildcard' && !s.activeEra){
+    mainEl.querySelectorAll('.era-grid .era-tile:not([data-era="wildcard"])').forEach(tile=>{
+      if (tile.classList.contains('disabled')) return;
+      tile.style.cursor='pointer';
+      tile.onclick = ()=>{
+        pushUpdate({ activeEra: tile.dataset.era, activeCard:null, activeQuestion:null });
+      };
+    });
+  }
+}
+
+/* ----------------------------------------------------------------------
+   6. BOOTSTRAP + starfield canvas
+   ---------------------------------------------------------------------- */
+function initStarfield(){
+  const canvas = document.getElementById('starfield-canvas');
+  const ctx = canvas.getContext('2d');
+  let stars = [];
+  function resize(){
+    canvas.width = window.innerWidth;
+    canvas.height = window.innerHeight;
+    const count = Math.floor((canvas.width*canvas.height)/9000);
+    stars = Array.from({length:count}, ()=>({
+      x: Math.random()*canvas.width,
+      y: Math.random()*canvas.height,
+      r: Math.random()*1.3+0.2,
+      a: Math.random()*0.6+0.2,
+      tw: Math.random()*0.02+0.005
+    }));
+  }
+  function tick(){
+    ctx.clearRect(0,0,canvas.width,canvas.height);
+    stars.forEach(s=>{
+      s.a += s.tw;
+      const alpha = 0.4 + Math.sin(s.a)*0.4;
+      ctx.beginPath();
+      ctx.arc(s.x, s.y, s.r, 0, Math.PI*2);
+      ctx.fillStyle = `rgba(220,235,255,${Math.max(0,alpha)})`;
+      ctx.fill();
+    });
+    requestAnimationFrame(tick);
+  }
+  window.addEventListener('resize', resize);
+  resize();
+  tick();
+}
+
+function boot(){
+  initStarfield();
+  renderLanding();
+}
+boot();
+</script>
+</body>
+</html>
